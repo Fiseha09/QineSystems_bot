@@ -1,6 +1,7 @@
 import asyncio
 import os
 import socket
+import traceback
 import uvicorn
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.exceptions import TelegramNetworkError
@@ -28,22 +29,6 @@ async def init_db():
         await seed_initial_data(session)
 
 
-async def run_bot_with_retry():
-    session = AiohttpSession()
-    session._connector_init["family"] = socket.AF_INET
-    bot.session = session
-
-    while True:
-        try:
-            await dp.start_polling(bot, handle_signals=False)
-            break
-        except TelegramNetworkError as exc:
-            print(f"[Telegram Network Drop]: {exc} — retrying in 5s...")
-            await asyncio.sleep(5)
-        except asyncio.CancelledError:
-            break
-
-
 def _register_routers():
     global _ROUTERS_REGISTERED
     if _ROUTERS_REGISTERED:
@@ -57,6 +42,30 @@ def _register_routers():
     dp.include_router(router)
     dp.include_router(student_res_router)
     _ROUTERS_REGISTERED = True
+
+
+@dp.error()
+async def on_dispatcher_error(event):
+    print("[Dispatcher Exception]:", event.exception)
+    traceback.print_exc()
+    return True
+
+
+async def run_bot_with_retry():
+    _register_routers()
+    session = AiohttpSession()
+    session._connector_init["family"] = socket.AF_INET
+    bot.session = session
+
+    while True:
+        try:
+            await dp.start_polling(bot, handle_signals=False)
+            break
+        except TelegramNetworkError as exc:
+            print(f"[Telegram Network Drop]: {exc} — retrying in 5s...")
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            break
 
 
 async def start_services():
