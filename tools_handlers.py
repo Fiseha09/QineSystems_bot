@@ -1,8 +1,9 @@
+import html
 import os
 from dotenv import load_dotenv
 from aiogram import Router, F
 from aiogram.types import (
-    Message, CallbackQuery, InlineKeyboardMarkup, 
+    Message, CallbackQuery, InlineKeyboardMarkup,
     InlineKeyboardButton, WebAppInfo
 )
 from aiogram.fsm.context import FSMContext
@@ -10,13 +11,14 @@ from sqlalchemy import select, or_
 
 from database import AsyncSessionLocal
 from models import LearningResource, Chapter, Course
-from bot import SearchFlow, back_and_home_row
+from bot import SearchFlow, back_and_home_row, build_main_menu
 from services import get_or_create_student, check_feature_entitlement
 
 tools_router = Router()
 
+
 # --- 1. Live Resource Search Execution ---
-@tools_router.message(SearchFlow.waiting_for_query)
+@tools_router.message(SearchFlow.waiting_for_query, F.text & ~F.text.startswith("/"))
 async def msg_execute_search(message: Message, state: FSMContext):
     query_str = (message.text or "").strip()
     if len(query_str) < 2:
@@ -24,6 +26,32 @@ async def msg_execute_search(message: Message, state: FSMContext):
         return
 
     async with AsyncSessionLocal() as db:
+        student = await get_or_create_student(db, message.from_user)
+        allowed, feature = await check_feature_entitlement(db, student, "search")
+        if not feature or not feature.is_enabled:
+            await state.clear()
+            await message.answer(
+                "⚠️ <b>Search Resources</b> is currently disabled by administrators.",
+                reply_markup=build_main_menu(message.from_user.id),
+                parse_mode="HTML",
+            )
+            return
+
+        if not allowed:
+            await state.clear()
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👑 View Premium Membership & Upgrade", callback_data="nav:membership")],
+                back_and_home_row("nav:main"),
+            ])
+            await message.answer(
+                "🔒 <b>Search Resources is a Premium Feature</b>\n\n"
+                "Upgrade to <b>Qine Plus</b> or <b>Qine Pro</b> via Membership to search "
+                "across published notes, modules, and past exams.",
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+            return
+
         stmt = (
             select(LearningResource, Chapter, Course)
             .join(Chapter, LearningResource.chapter_id == Chapter.id)
@@ -41,9 +69,10 @@ async def msg_execute_search(message: Message, state: FSMContext):
         rows = (await db.execute(stmt)).all()
 
     await state.clear()
+    safe_query = html.escape(query_str)
     if not rows:
         await message.answer(
-            f"🔍 <b>No published resources matched</b> <code>{query_str}</code>.\n"
+            f"🔍 <b>No published resources matched</b> <code>{safe_query}</code>.\n"
             f"Try searching another course or chapter keyword.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("feat:search")]),
             parse_mode="HTML"
@@ -52,7 +81,7 @@ async def msg_execute_search(message: Message, state: FSMContext):
 
     buttons = [
         [InlineKeyboardButton(
-            text=f"📄 [{crs.name} Ch.{ch.chapter_number}] {res.title}",
+            text=f"📄 [{crs.name} Ch.{ch.chapter_number}] {res.title}"[:64],
             callback_data=f"res:{res.id}:{crs.id}"
         )]
         for res, ch, crs in rows
@@ -60,10 +89,11 @@ async def msg_execute_search(message: Message, state: FSMContext):
     buttons.append(back_and_home_row("nav:main"))
 
     await message.answer(
-        f"🔍 <b>Search Results for</b> <code>{query_str}</code> ({len(rows)} found):",
+        f"🔍 <b>Search Results for</b> <code>{safe_query}</code> ({len(rows)} found):",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML"
     )
+
 
 # --- 2. Study Tools Hub (Launches GPA & Pomodoro Web Apps) ---
 @tools_router.callback_query(F.data == "feat:study_tools")
