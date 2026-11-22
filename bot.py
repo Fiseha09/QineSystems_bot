@@ -1386,7 +1386,10 @@ async def cb_initiate_payment(callback: CallbackQuery, state: FSMContext):
     await state.set_state(PaymentFlow.waiting_for_receipt)
     await state.update_data(plan_code=plan.code, pm_code=pm.code)
 
-    short_provider = format_payment_provider_label(pm)
+    short_provider = html.escape(str(format_payment_provider_label(pm)))
+    note_text = (pm.instructions or "").strip()
+    note_block = f"\n\n📌 <b>Payment Notes:</b>\n{html.escape(note_text)}" if note_text else ""
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Change Payment Method", callback_data=f"mplan:{plan.code}")],
         back_and_home_row("nav:membership"),
@@ -1395,9 +1398,10 @@ async def cb_initiate_payment(callback: CallbackQuery, state: FSMContext):
     await safe_edit_message(
         callback,
         f"🏦 <b>Payment Instructions — {short_provider}</b>\n\n"
-        f"• <b>Plan:</b> {plan.name} ({int(plan.price_etb)} ETB)\n"
-        f"• <b>Account Holder:</b> <code>{pm.account_holder}</code>\n"
-        f"• <b>Account Number:</b> <code>{pm.account_number}</code>\n\n"
+        f"• <b>Plan:</b> {html.escape(str(plan.name))} ({int(plan.price_etb)} ETB)\n"
+        f"• <b>Account Holder:</b> <code>{html.escape(str(pm.account_holder))}</code>\n"
+        f"• <b>Account Number:</b> <code>{html.escape(str(pm.account_number))}</code>"
+        f"{note_block}\n\n"
         f"📤 Send a photo or document of your payment receipt here once you complete the transfer.",
         reply_markup=kb,
     )
@@ -1433,13 +1437,14 @@ async def receive_payment_receipt(message: Message, state: FSMContext):
         InlineKeyboardButton(text="✅ Approve", callback_data=f"adm_pay:approve:{receipt.id}"),
         InlineKeyboardButton(text="❌ Reject", callback_data=f"adm_pay:reject:{receipt.id}"),
     ]])
+    safe_name = html.escape(message.from_user.full_name or str(message.from_user.id))
     for admin_id in get_live_admin_ids():
         try:
             if is_photo:
                 await message.bot.send_photo(
                     admin_id,
                     file_id,
-                    caption=f"🔔 Receipt #{receipt.id} from {message.from_user.full_name}",
+                    caption=f"🔔 Receipt #{receipt.id} from {safe_name}",
                     reply_markup=admin_kb,
                     parse_mode="HTML",
                 )
@@ -1447,13 +1452,12 @@ async def receive_payment_receipt(message: Message, state: FSMContext):
                 await message.bot.send_document(
                     admin_id,
                     file_id,
-                    caption=f"🔔 Receipt #{receipt.id} from {message.from_user.full_name}",
+                    caption=f"🔔 Receipt #{receipt.id} from {safe_name}",
                     reply_markup=admin_kb,
                     parse_mode="HTML",
                 )
         except Exception:
             pass
-
 
 @router.callback_query(F.data.startswith("adm_pay:"))
 async def cb_admin_review_payment(callback: CallbackQuery):
