@@ -239,7 +239,6 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
         plan_badge = format_plan_badge(student)
         full_name = student.full_name
 
-
     text = (
         f"🎓 <b>QineSystems Dashboard</b>\n"
         f"<i>Learn. Practice. Improve. Achieve.</i>\n\n"
