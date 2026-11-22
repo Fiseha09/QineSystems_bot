@@ -455,8 +455,8 @@ Whether you're just getting started or preparing for finals, choose the plan tha
     )
 ,
         "about": (
-        ,
-        """<b>🏛 About QineSystems</b>
+            "🏛 About QineSystems",
+            """<b>🏛 About QineSystems</b>
 
 - <b>QineSystems</b> (<code>@QineSystems_bot</code> · <code>@QineSystems</code>) supports university students across Ethiopia with structured courses, PDFs/resources, practice quizzes, and <b>Qine</b> AI study modes.
 - Built around <b>Learn, understand, practice, and grow</b>—focusing on real comprehension and exam readiness.
