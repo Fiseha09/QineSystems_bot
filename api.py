@@ -13,6 +13,13 @@ from models import (
 app = FastAPI(title="QineSystems Shared Backend API", version="1.0.0")
 ADMIN_SECRET = os.getenv("ADMIN_API_SECRET", "super_secret_qine_admin_key")
 
+
+@app.api_route("/", methods=["GET", "HEAD"])
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health_check():
+    return {"status": "ok", "service": "QineSystems Bot"}
+
+
 def verify_admin(x_admin_key: str = Header(...)):
     if x_admin_key != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Unauthorized Admin Key")

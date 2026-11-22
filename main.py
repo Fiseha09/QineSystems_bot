@@ -61,11 +61,11 @@ async def run_bot_with_retry():
         try:
             await dp.start_polling(bot, handle_signals=False)
             break
-        except TelegramNetworkError as exc:
-            print(f"[Telegram Network Drop]: {exc} — retrying in 5s...")
-            await asyncio.sleep(5)
         except asyncio.CancelledError:
             break
+        except Exception as exc:
+            print(f"[Telegram Polling Error]: {exc} — retrying in 5s...")
+            await asyncio.sleep(5)
 
 
 async def start_services():
