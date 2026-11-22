@@ -165,19 +165,23 @@ def build_main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(text="📚 Courses & Materials", callback_data="nav:my_courses"),
-            InlineKeyboardButton(text="📝 Quiz & Exams", callback_data="feat:quiz"),
+            InlineKeyboardButton(text="📝 take Quizz", callback_data="feat:quiz"),
         ],
         [
             InlineKeyboardButton(text="🤖 AI Study Assistant", callback_data="feat:ai_assistant"),
             InlineKeyboardButton(text="📊 My Progress", callback_data="nav:my_progress"),
         ],
         [
-            InlineKeyboardButton(text="⏱ Quiz", callback_data="feat:quiz"),
+            InlineKeyboardButton(text="🎓 Mid Exams", callback_data="feat:mid_exams"),
             InlineKeyboardButton(text="🎓 Final Exams", callback_data="feat:final_exams"),
         ],
         [
-            InlineKeyboardButton(text="💎 Membership & Referrals", callback_data="nav:membership"),
+            InlineKeyboardButton(text="💎 Premium Membership", callback_data="nav:membership"),
             InlineKeyboardButton(text="🆘 Support & Community", callback_data="nav:help"),
+        ],
+        [
+            InlineKeyboardButton(text="🤖 AI Help", callback_data="nav:ai_help"),
+            InlineKeyboardButton(text="🎁 Referral", callback_data="nav:referral"),
         ],
     ]
 
