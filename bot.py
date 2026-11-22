@@ -472,13 +472,13 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
             await callback.answer("This feature is currently disabled by administrators.", show_alert=True)
             return
         if not allowed:
+            feat_title = feature.title or feature_key
             await callback.answer(
-                "🔒 Search Resources is a Premium feature!\n\n"
-                "Upgrade to Qine Plus or Qine Pro via Membership in the Main Menu to instantly find any note, module, or past exam.",
+                f"🔒 {feat_title} is a Premium feature!\n\n"
+                "Upgrade to Qine Plus or Qine Pro via Membership in the Main Menu to unlock.",
                 show_alert=True,
             )
             return
-
 
     if feature_key == "search":
         await callback.answer()
