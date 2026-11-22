@@ -59,10 +59,12 @@ def is_direct_feature(feature_key: str) -> bool:
 
 def build_resource_caption(title: str) -> str:
     return (
-        f"📘 <b>{title}</b>\n"
-        f"🎓 Prepared for Ethiopian university freshman students.\n"
-        f"📢 Join our channel: <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>"
+        f"📘 <b>{title}</b>\n\n"
+        f"🎓 Curated for <b>Ethiopian University Students</b> by <b>QineSystems</b>.\n"
+        f"📢 <b>Official Channel:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n"
+        f"🤖 <b>Study Bot:</b> @QineSystems_bot"
     )
+
 
 
 async def safe_edit_message(
@@ -95,15 +97,22 @@ async def _show_premium_required_card(
 ):
     await callback.answer()
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👑 View Premium Membership & Upgrade", callback_data="nav:membership")],
+        [InlineKeyboardButton(text="👑 View Premium & Upgrade", callback_data="nav:membership")],
         back_and_home_row(back_cb),
     ])
     await safe_edit_message(
         callback,
-        f"🔒 <b>{feature_title} — Premium Required</b>\n\n"
-        f"📌 <b>Selected:</b> <b>{selection_label}</b>\n\n"
-        f"An active <b>Qine Plus</b> or <b>Qine Pro</b> subscription is required to access "
-        f"{feature_title} items.",
+        (
+            f"🔒 <b>{feature_title} — Premium Access</b>\n\n"
+            f"📌 <b>Selected:</b> {selection_label}\n\n"
+            f"Unlock <b>{feature_title}</b> and supercharge your studies! You need an active "
+            f"<b>Qine Plus</b> or <b>Qine Pro</b> membership to view these materials.\n\n"
+            f"✨ <b>Why Upgrade?</b>\n"
+            f"• Unlimited access to exclusive notes, past exams & guides\n"
+            f"• Full access to the <b>AlgoMage AI Assistant Suite</b>\n"
+            f"• faster study sessions anytime\n\n"
+            f"👇 <i>Choose an option below to upgrade or go back:</i>"
+        ),
         reply_markup=kb,
     )
 
@@ -332,13 +341,23 @@ async def show_ai_suite(callback: CallbackQuery, state: FSMContext | None = None
 
     text = (
         "🤖 <b>AlgoMage AI Assistant Suite</b>\n\n"
-        "Select an AI study mode below to get started:"
+        "Your personal 24/7 study companion! Choose a specialized tool below to boost your learning:\n\n"
+        "🧑‍🏫 <b>AI Tutor</b> – Get step-by-step explanations on tough concepts\n"
+        "❓ <b>Ask AI</b> – Quick answers to any general academic question\n"
+        "➗ <b>Math Solver</b> – Solve equations with detailed workings\n"
+        "🗣 <b>English Coach</b> – Practice grammar, writing, and fluency\n"
+        "💻 <b>Coding Assistant</b> – Debug, write, and understand code\n"
+        "📝 <b>Exam Prep</b> – Generate practice quizzes and mock questions\n"
+        "📄 <b>Document Q&A</b> – Upload notes or PDFs and ask questions\n"
+        "📋 <b>Summarize</b> – Turn long lectures into crisp study notes\n\n"
+        "👇 <i>Tap a mode below to begin:</i>"
     )
     await safe_edit_message(
         callback,
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
+
 
 
 @router.callback_query(F.data == "feat:ai_assistant")
@@ -453,14 +472,23 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
             return
 
         if feature_key == "search":
-            await callback.answer()
-            await state.set_state(SearchFlow.waiting_for_query)
-            await safe_edit_message(
-                callback,
-                "🔍 <b>Search Learning Resources</b>\nSend a keyword to search published materials:",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
-            )
-            return
+    await callback.answer()
+    await state.set_state(SearchFlow.waiting_for_query)
+    await safe_edit_message(
+        callback,
+        (
+            "🔍 <b>Search Learning Resources</b>\n\n"
+            "Looking for something specific? Type and send a keyword, topic, or title "
+            "to find published notes, past exams, and study guides.\n\n"
+            "💡 <b>Search Tips:</b>\n"
+            "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i> Mathematics</i>)\n"
+            "• Search by topic (e.g., <i>Personality</i>, <i>Thermodynamics</i>)\n"
+            "• Keep it brief—1 to 3 words usually works best!"
+        ),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
+    )
+    return
+
 
         courses = await get_all_courses_for_feature(db, feature_key)
         await callback.answer()
@@ -1408,18 +1436,45 @@ async def cb_initiate_payment(callback: CallbackQuery, state: FSMContext):
     )
 
 
+from datetime import datetime
+
+
 @router.message(PaymentFlow.waiting_for_receipt, F.photo | F.document)
 async def receive_payment_receipt(message: Message, state: FSMContext):
     data = await state.get_data()
+    plan_code = data.get("plan_code")
+    pm_code = data.get("pm_code")
+
+    if not plan_code or not pm_code:
+        await state.clear()
+        await message.answer(
+            "⚠️ <b>Session Expired</b>\nPlease select your plan and payment method again from Membership.",
+            reply_markup=build_main_menu(message.from_user.id),
+            parse_mode="HTML",
+        )
+        return
+
     is_photo = bool(message.photo)
     file_id = message.photo[-1].file_id if is_photo else message.document.file_id
     stored_file_id = file_id if is_photo else f"DOC:{file_id}"
+    media_label = "Photo Receipt" if is_photo else (
+        f"Document ({html.escape(message.document.file_name)})"
+        if message.document and message.document.file_name
+        else "Document Receipt"
+    )
 
     async with AsyncSessionLocal() as db:
+        plan = (
+            await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.code == plan_code))
+        ).scalar_one_or_none()
+        pm = (
+            await db.execute(select(PaymentMethodConfig).where(PaymentMethodConfig.code == pm_code))
+        ).scalar_one_or_none()
+
         receipt = PaymentReceipt(
             student_id=message.from_user.id,
-            plan_code=data["plan_code"],
-            payment_method=data["pm_code"],
+            plan_code=plan_code,
+            payment_method=pm_code,
             receipt_file_id=stored_file_id,
             status="PENDING",
         )
@@ -1429,23 +1484,66 @@ async def receive_payment_receipt(message: Message, state: FSMContext):
 
     await state.clear()
     await message.answer(
-        "✅ <b>Receipt Submitted!</b> Awaiting administrator approval.",
+        f"✅ <b>Receipt #{receipt.id} Submitted!</b>\n"
+        f"Your payment for <b>{html.escape(plan.name if plan else plan_code)}</b> via "
+        f"<b>{html.escape(pm.provider_name if pm else pm_code)}</b> is now in the admin verification queue.",
         reply_markup=build_main_menu(message.from_user.id),
         parse_mode="HTML",
     )
 
-    admin_kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Approve", callback_data=f"adm_pay:approve:{receipt.id}"),
-        InlineKeyboardButton(text="❌ Reject", callback_data=f"adm_pay:reject:{receipt.id}"),
-    ]])
-    safe_name = html.escape(message.from_user.full_name or str(message.from_user.id))
+    safe_name = html.escape(message.from_user.full_name or "Student")
+    username_line = (
+        f"@{html.escape(message.from_user.username)}"
+        if message.from_user.username
+        else "<i>No username</i>"
+    )
+    plan_display = (
+        f"{html.escape(plan.name)} (<code>{html.escape(plan_code)}</code> · <b>{int(plan.price_etb)} ETB</b>)"
+        if plan
+        else f"<code>{html.escape(plan_code)}</code>"
+    )
+    method_display = (
+        f"{html.escape(pm.provider_name)} (<code>{html.escape(pm_code)}</code>)"
+        if pm
+        else f"<code>{html.escape(pm_code)}</code>"
+    )
+    submitted_at = (
+        receipt.created_at.strftime("%Y-%m-%d %H:%M UTC")
+        if getattr(receipt, "created_at", None)
+        else datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    )
+
+    admin_caption = (
+        f"🔔 <b>New Payment Receipt · #{receipt.id}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Student:</b> {safe_name} ({username_line})\n"
+        f"🆔 <b>Telegram ID:</b> <code>{message.from_user.id}</code>\n"
+        f"💎 <b>Plan:</b> {plan_display}\n"
+        f"💳 <b>Method:</b> {method_display}\n"
+        f"📎 <b>Attachment:</b> {media_label}\n"
+        f"🕒 <b>Submitted:</b> <code>{submitted_at}</code>\n"
+        f"📌 <b>Status:</b> <b>PENDING</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Verify the transfer details on the attached receipt before approving.</i>"
+    )
+
+    admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Approve Plan", callback_data=f"adm_pay:approve:{receipt.id}"),
+            InlineKeyboardButton(text="❌ Reject", callback_data=f"adm_pay:reject:{receipt.id}"),
+        ],
+        [
+            InlineKeyboardButton(text="💰 Payment Hub", callback_data="pro:payments"),
+        ],
+    ])
+
     for admin_id in get_live_admin_ids():
         try:
             if is_photo:
                 await message.bot.send_photo(
                     admin_id,
                     file_id,
-                    caption=f"🔔 Receipt #{receipt.id} from {safe_name}",
+                    caption=admin_caption[:1024],
                     reply_markup=admin_kb,
                     parse_mode="HTML",
                 )
@@ -1453,7 +1551,7 @@ async def receive_payment_receipt(message: Message, state: FSMContext):
                 await message.bot.send_document(
                     admin_id,
                     file_id,
-                    caption=f"🔔 Receipt #{receipt.id} from {safe_name}",
+                    caption=admin_caption[:1024],
                     reply_markup=admin_kb,
                     parse_mode="HTML",
                 )
@@ -2149,6 +2247,14 @@ async def cb_open_community(callback: CallbackQuery, state: FSMContext):
         [
             InlineKeyboardButton(text="📣 Telegram Channel", url="https://t.me/QineSystems"),
             InlineKeyboardButton(text="💬 Student Group", url="https://t.me/QineSystems_fresh"),
+        ],
+        [
+            InlineKeyboardButton(text="▶️ YouTube Channel", url="https://www.youtube.com/@qinesystems"),
+            InlineKeyboardButton(text="🌐 Official Website", url="https://qinesystems.vercel.app"),
+        ],
+        [
+                    InlineKeyboardButton(text="📣 Telegram Channel", url="https://t.me/QineSystems"),
+                    InlineKeyboardButton(text="💬 Student Group", url="https://t.me/QineSystems_fresh"),
         ],
         [
             InlineKeyboardButton(text="▶️ YouTube Channel", url="https://www.youtube.com/@qinesystems"),

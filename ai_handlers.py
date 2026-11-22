@@ -429,32 +429,96 @@ QineSystems: Learn. Understand. Practice. Grow.
 HELP_TOPICS: dict[str, tuple[str, str]] = {
     "premium": (
         "💎 Free vs. Premium Plans",
-        """<b>💎 Free vs. Premium Plans</b>
-- <b>Free Tier (<code>FREE</code>):</b> Accesses free-tier features/resources and a basic daily <b>Qine</b> AI request quota.
-- <b>Premium Plans:</b> Unlock premium study features/protected materials and higher daily <b>Qine</b> quotas.
-- <b>How to Upgrade:</b> Open <b>Membership</b> from the Main Menu, choose a plan, submit your payment receipt, and wait for admin approval.
-- <b>Quota Rule:</b> Successful AI responses use 1 daily quota unit; rate-limited or failed requests are not charged.""",
-    ),
-    "about": (
-        "🏛 About QineSystems",
+        """<b>💎 QineSystems: Free vs. Premium Plans</b>
+
+Whether you're just getting started or preparing for finals, choose the plan that fits your study goals:
+
+🆓 <b>Free Tier (<code>FREE</code>)</b>
+• Access to free freshman modules, general notes, and basic resources
+• A starter daily quota for the <b>AlgoMage AI Assistant Suite</b>
+• Great for casual browsing and quick lookups
+
+🚀 <b>Premium Plans (Qine Plus & Qine Pro)</b>
+• <b>Full Library Access:</b> Unlock protected past exams, exclusive worksheets, and premium guides
+• <b>Higher AI Limits:</b> Generous daily <b>Qine AI</b> quotas for deep tutoring, math solving, and document Q&A
+• <b>Exam Advantage:</b> Built for serious semester prep without hitting daily limits
+
+💳 <b>How to Upgrade</b>
+1. Go to the <b>Main Menu</b> and tap <b>Membership</b>
+2. Select your preferred plan (<b>Qine Plus</b> or <b>Qine Pro</b>)
+3. Complete your payment and upload your <b>payment receipt</b>
+4. Once verified by an admin, your account upgrades automatically!
+
+⚡ <b>Fair Quota Guarantee</b>
+• Only <b>successful</b> AI responses deduct 1 daily quota unit
+• Failed or rate-limited requests are <b>never</b> deducted from your balance""",
+    )
+,
+        "about": (
+        ,
         """<b>🏛 About QineSystems</b>
+
 - <b>QineSystems</b> (<code>@QineSystems_bot</code> · <code>@QineSystems</code>) supports university students across Ethiopia with structured courses, PDFs/resources, practice quizzes, and <b>Qine</b> AI study modes.
-- Built around <b>Learn, understand, practice, and grow</b>—focusing on real comprehension and exam readiness.""",
+- Built around <b>Learn, understand, practice, and grow</b>—focusing on real comprehension and exam readiness.
+
+<b>QineSystems</b> is an AI-powered learning and academic support platform specially designed for Ethiopian university students! 🇪🇹🎓 
+
+Our core philosophy is <b>Learn. Understand. Practice. Grow.</b> 🌱✨ Our mission is to make your academic journey much more accessible, structured, engaging, and effective by bringing together study resources, interactive practice tools, and AI-powered learning assistance right inside Telegram (<code>@QineSystems_bot</code>).
+
+<b>Here is a quick snapshot of what you can dive into using our Main Menu:</b>
+- 📚 <b>Courses & Study Materials:</b> Browse courses based on your semester and stream, and check out available materials like modules, lecture notes, and PDFs.
+- 📝 <b>Exam Trainer & Practice Quizzes:</b> Test your knowledge, practice chapter-by-chapter, and prep for your exams!
+- 🤖 <b>AI Study Assistant (Qine):</b> Chat with 8 specialized study modes—including AI Tutor, Math Solver, English Coach, Coding Assistant, and more—to help break down difficult concepts step-by-step.
+- 💳 <b>Membership & Plans:</b> Choose between our Free plan, Qine Plus, and Qine Pro to unlock higher AI daily quotas and premium features.
+- 📊 <b>Learning Progress:</b> Track your quiz scores, accuracy, and study activity to see how you're growing.
+
+Want to explore any of these specific features or need help finding your way around the bot? Just let me know! 🚀😊""",
     ),
-    "ai": (
+
+        "ai": (
         "🤖 How Qine AI & Context Work",
         """<b>🤖 How Qine AI &amp; Context Work</b>
-- Open <b>AI Assistant Suite</b> and pick a mode: <b>AI Tutor</b>, <b>Ask AI</b>, <b>Math Solver</b>, <b>English Coach</b>, <b>Coding Assistant</b>, <b>Exam Prep</b>, <b>Document Q&amp;A</b>, or <b>Summarize Materials</b>.
-- Tap <b>Attach Course / PDF Context</b> to pick a <b>Course</b> and a specific <b>Resource / PDF</b> so <b>Qine</b> tailors answers to that material.
-- Ask follow-up questions in the same chat—<b>Qine</b> remembers earlier turns in that session until you tap <b>🧹 New Chat</b> or switch tools.""",
+
+Get personalized, course-aware study help directly inside Telegram by combining specialized AI modes with your actual university materials.
+
+<b>1️⃣ Choose Your Study Mode</b>
+Open the <b>AI Assistant Suite</b> and select the tool that fits your task:
+• 🧑‍🏫 <b>AI Tutor</b> &amp; ❓ <b>Ask AI</b> – Step-by-step concept breakdowns and quick answers
+• ➗ <b>Math Solver</b> &amp; 💻 <b>Coding Assistant</b> – Guided equations, proofs, and code debugging
+• 🗣 <b>English Coach</b> – Grammar, essay structure, and communication practice
+• 📝 <b>Exam Prep</b>, 📄 <b>Document Q&amp;A</b> &amp; 📋 <b>Summarize Materials</b> – Practice questions, PDF Q&amp;A, and concise study notes
+
+<b>2️⃣ Attach Course &amp; PDF Context (Pro Tip! 💡)</b>
+• Tap <b>Attach Course / PDF Context</b> to select a specific <b>Course</b> and <b>Resource / PDF</b> from our library.
+• Once attached, <b>Qine</b> grounds its explanations, examples, and summaries directly in that exact lecture note or module!
+
+<b>3️⃣ Natural Follow-Up Memory</b>
+• Ask follow-up questions in the same chat—<b>Qine</b> remembers earlier messages in your active session so you can dig deeper without repeating yourself.
+• Ready to switch topics? Tap <b>🧹 New Chat</b> or pick a different AI mode to start fresh.""",
     ),
-    "workflow": (
+
+        "workflow": (
         "🗺 Bot Workflow & Quizzes",
         """<b>🗺 Overall Bot Workflow &amp; Quizzes</b>
-- <b>Courses &amp; PDFs:</b> Browse subjects and study files. Premium materials are protected from forwarding/saving.
-- <b>Quizzes:</b> Practice questions by subject/topic to test understanding and spot gaps.
-- <b>Help &amp; Support:</b> Use <b>Help &amp; Support</b> for direct tickets/assistance, or stay right here to ask <b>Qine</b> how any feature works.""",
+
+<b>QineSystems</b> is designed around a simple, effective study loop—<b>Learn → Practice → Master</b>—so you can stay organized from day one of the semester through finals.
+
+<b>1️⃣ Learn: Courses &amp; Study Materials 📚</b>
+• Browse organized subjects, lecture notes, modules, and past exam PDFs from the <b>Main Menu</b>.
+• <i>Content Protection Note:</i> To protect exclusive academic content, <b>Premium materials</b> have forwarding and saving disabled inside Telegram.
+
+<b>2️⃣ Practice: Interactive Quizzes 📝</b>
+• Test your knowledge with chapter-by-chapter and topic-based quizzes.
+• Get instant feedback on every question to check your comprehension, spot weak areas early, and track your accuracy over time.
+
+<b>3️⃣ Master: AI Study Support 🤖</b>
+• Stuck on a tough quiz question or dense PDF? Jump into the <b>AI Assistant Suite</b>, attach your course material, and let <b>Qine</b> walk you through it step by step.
+
+<b>4️⃣ Help &amp; Support 🛠</b>
+• Need account assistance, payment verification help, or have feedback? Open <b>Help &amp; Support</b> to submit a direct support ticket to our team.
+• Want quick tips on using the bot? Stay right here and ask <b>Qine</b> how any feature works!""",
     ),
+
 }
 
 

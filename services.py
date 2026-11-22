@@ -29,8 +29,8 @@ DEFAULT_FEATURES = [
     ("exam_trainer", "🎯 Exam Trainer", False, False, 6),
     ("flashcards", "🃏 Flashcards", False, False, 7),
     ("practice_questions", "✍️ Practice Questions", False, False, 8),
-    ("search", "🔍 Search Resources", False, False, 9),
-    ("study_tools", "🛠 Study Tools", False, False, 10),
+    ("search", "🔍 Search Resources", False, True, 9),
+    ("study_tools", "🛠 Study Tools", False, True, 10),
     ("more_resources", "📂 Study Resources", False, False, 11),
     ("ai_assistant", "🤖 AI Study Assistant", False, False, 12),
 ]
