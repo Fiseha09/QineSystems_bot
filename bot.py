@@ -466,7 +466,9 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
         return
 
     async with AsyncSessionLocal() as db:
-        feature = (await db.execute(select(FeatureConfig).where(FeatureConfig.key == feature_key))).scalar_one_or_none()
+        feature = (
+            await db.execute(select(FeatureConfig).where(FeatureConfig.key == feature_key))
+        ).scalar_one_or_none()
         if not feature or not feature.is_enabled:
             await callback.answer("This feature is currently disabled by administrators.", show_alert=True)
             return
@@ -481,13 +483,40 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
                     "Looking for something specific? Type and send a keyword, topic, or title "
                     "to find published notes, past exams, and study guides.\n\n"
                     "💡 <b>Search Tips:</b>\n"
-                    "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i> Mathematics</i>)\n"
+                    "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i>Mathematics</i>)\n"
                     "• Search by topic (e.g., <i>Personality</i>, <i>Thermodynamics</i>)\n"
                     "• Keep it brief—1 to 3 words usually works best!"
                 ),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
             )
             return
+
+        courses = await get_all_courses_for_feature(db, feature_key)
+
+    await callback.answer()
+    if not courses:
+        back_target = "nav:free_tools" if feature.is_free else "nav:premium_tools"
+        await safe_edit_message(
+            callback,
+            f"📭 <b>{feature.title}</b>\n\nNo courses found in the catalogue.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(back_target)]),
+        )
+        return
+
+    back_target = "nav:free_tools" if feature.is_free else "nav:premium_tools"
+    kb, page_num, total_pages = build_paginated_courses_keyboard(
+        courses=courses,
+        feature_key=feature_key,
+        back_target=back_target,
+        page=0,
+    )
+
+    await safe_edit_message(
+        callback,
+        f"<b>{feature.title}</b> → <b>Select Course</b> (Page {page_num}/{total_pages})\n"
+        f"Select a course below:",
+        reply_markup=kb,
+    )
 
 
 @router.message(SearchFlow.waiting_for_query, F.text & ~F.text.startswith("/"))
@@ -577,33 +606,6 @@ async def msg_execute_resource_search(message: Message, state: FSMContext):
         f"Tap a resource below to open it:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML",
-    )
-    
-
-    courses = await get_all_courses_for_feature(db, feature_key)
-    await callback.answer()
-    if not courses:
-        back_target = "nav:free_tools" if feature.is_free else "nav:premium_tools"
-        await safe_edit_message(
-            callback,
-            f"📭 <b>{feature.title}</b>\n\nNo courses found in the catalogue.",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(back_target)]),
-        )
-        return
-
-    back_target = "nav:free_tools" if feature.is_free else "nav:premium_tools"
-    kb, page_num, total_pages = build_paginated_courses_keyboard(
-        courses=courses,
-        feature_key=feature_key,
-        back_target=back_target,
-        page=0,
-    )
-
-    await safe_edit_message(
-        callback,
-        f"<b>{feature.title}</b> → <b>Select Course</b> (Page {page_num}/{total_pages})\n"
-        f"Select a course below:",
-        reply_markup=kb,
     )
 
 
