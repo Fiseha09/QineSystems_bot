@@ -466,38 +466,119 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
         return
 
     async with AsyncSessionLocal() as db:
-        student = await get_or_create_student(db, callback.from_user)
-        allowed, feature = await check_feature_entitlement(db, student, feature_key)
+        feature = (await db.execute(select(FeatureConfig).where(FeatureConfig.key == feature_key))).scalar_one_or_none()
         if not feature or not feature.is_enabled:
             await callback.answer("This feature is currently disabled by administrators.", show_alert=True)
             return
-        if not allowed:
-            feat_title = feature.title or feature_key
-            await callback.answer(
-                f"🔒 {feat_title} is a Premium feature!\n\n"
-                "Upgrade to Qine Plus or Qine Pro via Membership in the Main Menu to unlock.",
-                show_alert=True,
+
+        if feature_key == "search":
+            await callback.answer()
+            await state.set_state(SearchFlow.waiting_for_query)
+            await safe_edit_message(
+                callback,
+                (
+                    "🔍 <b>Search Learning Resources</b>\n\n"
+                    "Looking for something specific? Type and send a keyword, topic, or title "
+                    "to find published notes, past exams, and study guides.\n\n"
+                    "💡 <b>Search Tips:</b>\n"
+                    "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i> Mathematics</i>)\n"
+                    "• Search by topic (e.g., <i>Personality</i>, <i>Thermodynamics</i>)\n"
+                    "• Keep it brief—1 to 3 words usually works best!"
+                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
             )
             return
 
-    if feature_key == "search":
-        await callback.answer()
-        await state.set_state(SearchFlow.waiting_for_query)
-        await safe_edit_message(
-            callback,
-            (
-                "🔍 <b>Search Learning Resources</b>\n\n"
-                "Looking for something specific? Type and send a keyword, topic, or title "
-                "to find published notes, past exams, and study guides.\n\n"
-                "💡 <b>Search Tips:</b>\n"
-                "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i>Mathematics</i>)\n"
-                "• Search by topic (e.g., <i>Personality</i>, <i>Thermodynamics</i>)\n"
-                "• Keep it brief—1 to 3 words usually works best!"
-            ),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
+
+@router.message(SearchFlow.waiting_for_query, F.text & ~F.text.startswith("/"))
+async def msg_execute_resource_search(message: Message, state: FSMContext):
+    raw_query = (message.text or "").strip()
+    if not raw_query:
+        await message.answer("⚠️ Please type a keyword, subject, or topic to search.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        student = await get_or_create_student(db, message.from_user)
+        allowed, feature = await check_feature_entitlement(db, student, "search")
+        if not feature or not feature.is_enabled:
+            await state.clear()
+            await message.answer(
+                "⚠️ <b>Search Resources</b> is currently disabled by administrators.",
+                reply_markup=build_main_menu(message.from_user.id),
+                parse_mode="HTML",
+            )
+            return
+
+        if not allowed:
+            await state.clear()
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👑 View Premium & Upgrade", callback_data="nav:membership")],
+                back_and_home_row("nav:main"),
+            ])
+            await message.answer(
+                "🔒 <b>Search Resources — Premium Access</b>\n\n"
+                "Upgrade to <b>Qine Plus</b> or <b>Qine Pro</b> via Membership to search "
+                "across published notes, modules, and past exams.",
+                reply_markup=kb,
+                parse_mode="HTML",
+            )
+            return
+
+        pattern = f"%{raw_query}%"
+        rows = (
+            await db.execute(
+                select(LearningResource, Chapter.course_id, Course.name)
+                .join(Chapter, LearningResource.chapter_id == Chapter.id)
+                .join(Course, Chapter.course_id == Course.id)
+                .where(
+                    LearningResource.is_published == True,
+                    Chapter.is_published == True,
+                    Course.is_active == True,
+                    (
+                        LearningResource.title.ilike(pattern)
+                        | LearningResource.text_content.ilike(pattern)
+                        | Course.name.ilike(pattern)
+                        | Chapter.title.ilike(pattern)
+                    ),
+                )
+                .order_by(LearningResource.id.desc())
+                .limit(12)
+            )
+        ).all()
+
+    safe_query = html.escape(raw_query)
+    if not rows:
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔍 Search Again", callback_data="feat:search")],
+            back_and_home_row("nav:main"),
+        ])
+        await message.answer(
+            f"🔎 <b>No results found</b> for <code>{safe_query}</code>.\n\n"
+            f"Try a shorter keyword (1–3 words) like <i>Biology</i>, <i>Economics</i>, or <i>Chapter 1</i>.",
+            reply_markup=kb,
+            parse_mode="HTML",
         )
         return
 
+    buttons: list[list[InlineKeyboardButton]] = []
+    for res, crs_id, crs_name in rows:
+        short_title = (res.title or "Resource").strip()[:36]
+        short_crs = (crs_name or "").strip()[:14]
+        btn_label = f"📄 {short_title}" + (f" · {short_crs}" if short_crs else "")
+        buttons.append([
+            InlineKeyboardButton(text=btn_label[:64], callback_data=f"res:{res.id}:{crs_id}")
+        ])
+
+    buttons.append([InlineKeyboardButton(text="🔍 New Search", callback_data="feat:search")])
+    buttons.append(back_and_home_row("nav:main"))
+
+    await message.answer(
+        f"🔍 <b>Search Results for</b> <code>{safe_query}</code> ({len(rows)} found)\n"
+        f"Tap a resource below to open it:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode="HTML",
+    )
+    
 
     courses = await get_all_courses_for_feature(db, feature_key)
     await callback.answer()
