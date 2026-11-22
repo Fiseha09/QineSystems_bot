@@ -16,6 +16,7 @@ from models import (
     FeatureConfig,
     Flashcard,
     LearningResource,
+    PaymentMethodConfig,
     PaymentReceipt,
     QuizAttempt,
     QuizQuestion,
@@ -45,6 +46,7 @@ class ProAdminFSM(StatesGroup):
     broadcasting = State()
     confirming_broadcast = State()
     validating_csv = State()
+    editing_pm_field = State()
 
 
 def pro_admin_home_kb(pending_count: int) -> InlineKeyboardMarkup:
@@ -96,7 +98,10 @@ def payment_hub_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 View All Payments", callback_data="pay:all:0"),
         ],
         [
+            InlineKeyboardButton(text="💳 Payment Accounts", callback_data="pay:methods"),
             InlineKeyboardButton(text="📈 Revenue Stats", callback_data="pay:stats"),
+        ],
+        [
             InlineKeyboardButton(text="✅ Approve All", callback_data="pay:approve_all_confirm"),
         ],
         [
@@ -361,7 +366,7 @@ async def cb_pro_toggle_category(callback: CallbackQuery):
 
 
 # =====================================================================
-# PAYMENT MANAGEMENT HUB
+# PAYMENT MANAGEMENT HUB & PAYMENT ACCOUNTS
 # =====================================================================
 @admin_pro_router.callback_query(F.data == "pro:payments")
 async def cb_payment_management_hub(callback: CallbackQuery):
@@ -380,15 +385,155 @@ async def cb_payment_management_hub(callback: CallbackQuery):
         rejected_n = (await db.execute(
             select(func.count(PaymentReceipt.id)).where(PaymentReceipt.status == "REJECTED")
         )).scalar() or 0
+        active_pm_n = (await db.execute(
+            select(func.count(PaymentMethodConfig.code)).where(PaymentMethodConfig.is_verified_active.is_(True))
+        )).scalar() or 0
 
     text = (
         "💰 <b>Payment Management</b>\n\n"
         "Choose an option to manage payments:\n\n"
         f"• ⏳ Pending: <b>{pending_n}</b>\n"
         f"• ✅ Approved: <b>{approved_n}</b>\n"
-        f"• ❌ Rejected: <b>{rejected_n}</b>"
+        f"• ❌ Rejected: <b>{rejected_n}</b>\n"
+        f"• 💳 Active Payment Methods: <b>{active_pm_n}</b>"
     )
     await safe_edit_or_send(callback, text, payment_hub_kb())
+
+
+@admin_pro_router.callback_query(F.data == "pay:methods")
+async def cb_pay_methods_list(callback: CallbackQuery, state: FSMContext):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    await state.clear()
+    await callback.answer()
+
+    async with AsyncSessionLocal() as db:
+        methods = (
+            await db.execute(select(PaymentMethodConfig).order_by(PaymentMethodConfig.code))
+        ).scalars().all()
+
+    if not methods:
+        await safe_edit_or_send(
+            callback,
+            "💳 <b>Payment Accounts</b>\n\nNo payment methods found in database.",
+            back_pro_kb("pro:payments", "⬅️ Back to Payments"),
+        )
+        return
+
+    lines = ["💳 <b>Payment Accounts &amp; Activation</b>\n"]
+    buttons: list[list[InlineKeyboardButton]] = []
+    for pm in methods:
+        badge = "🟢 ACTIVE" if pm.is_verified_active else "🔴 INACTIVE"
+        note_preview = (pm.instructions or "").strip()
+        note_line = f"\n   Note: <i>{note_preview[:45]}</i>" if note_preview else ""
+        lines.append(
+            f"{badge} <b>{pm.provider_name}</b> (<code>{pm.code}</code>)\n"
+            f"   Holder: <code>{pm.account_holder}</code> · Acct: <code>{pm.account_number}</code>{note_line}"
+        )
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{'🔴 Disable' if pm.is_verified_active else '🟢 Enable'} {pm.code}",
+                callback_data=f"pay:pm_tog:{pm.code}",
+            ),
+            InlineKeyboardButton(text="✏️ Holder", callback_data=f"pay:pm_edit:{pm.code}:holder"),
+            InlineKeyboardButton(text="🔢 Acct", callback_data=f"pay:pm_edit:{pm.code}:number"),
+            InlineKeyboardButton(text="📝 Note", callback_data=f"pay:pm_edit:{pm.code}:instructions"),
+        ])
+
+    buttons.append([InlineKeyboardButton(text="⬅️ Back to Payments", callback_data="pro:payments")])
+    await safe_edit_or_send(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@admin_pro_router.callback_query(F.data.startswith("pay:pm_tog:"))
+async def cb_pay_method_toggle(callback: CallbackQuery, state: FSMContext):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    code = callback.data.split(":", 2)[2]
+    async with AsyncSessionLocal() as db:
+        pm = (
+            await db.execute(select(PaymentMethodConfig).where(PaymentMethodConfig.code == code))
+        ).scalar_one_or_none()
+        if not pm:
+            await callback.answer("Payment method not found.", show_alert=True)
+            return
+        pm.is_verified_active = not bool(pm.is_verified_active)
+        await db.commit()
+        new_state = pm.is_verified_active
+
+    await callback.answer(f"{code}: {'ACTIVE' if new_state else 'INACTIVE'}", show_alert=True)
+    await cb_pay_methods_list(callback, state)
+
+
+@admin_pro_router.callback_query(F.data.startswith("pay:pm_edit:"))
+async def cb_pay_method_edit_prompt(callback: CallbackQuery, state: FSMContext):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    _, _, code, field = callback.data.split(":", 3)
+
+    async with AsyncSessionLocal() as db:
+        pm = (
+            await db.execute(select(PaymentMethodConfig).where(PaymentMethodConfig.code == code))
+        ).scalar_one_or_none()
+    if not pm:
+        await callback.answer("Payment method not found.", show_alert=True)
+        return
+
+    await callback.answer()
+    await state.set_state(ProAdminFSM.editing_pm_field)
+    await state.update_data(pm_code=pm.code, pm_field=field)
+
+    label_map = {
+        "holder": ("Account Holder Name", pm.account_holder),
+        "number": ("Account / Phone Number", pm.account_number),
+        "instructions": ("Payment Instructions", pm.instructions or "—"),
+    }
+    label, current_val = label_map.get(field, ("Value", "—"))
+    await safe_edit_or_send(
+        callback,
+        f"✏️ <b>Edit {label} · {pm.code}</b>\n"
+        f"Current value: <code>{current_val}</code>\n\n"
+        f"Send the new {label.lower()} below:",
+        back_pro_kb("pay:methods", "⬅️ Cancel"),
+    )
+
+
+@admin_pro_router.message(ProAdminFSM.editing_pm_field, F.text & ~F.text.startswith("/"))
+async def msg_pay_method_save_field(message: Message, state: FSMContext):
+    if not is_pro_admin(message.from_user.id):
+        return
+    new_val = (message.text or "").strip()
+    if not new_val:
+        await message.answer("⚠️ Value cannot be empty. Send a valid value.")
+        return
+
+    data = await state.get_data()
+    code = data.get("pm_code")
+    field = data.get("pm_field")
+    await state.clear()
+
+    async with AsyncSessionLocal() as db:
+        pm = (
+            await db.execute(select(PaymentMethodConfig).where(PaymentMethodConfig.code == code))
+        ).scalar_one_or_none()
+        if not pm:
+            await message.answer("❌ Payment method not found.", reply_markup=back_pro_kb("pay:methods", "⬅️ Back"))
+            return
+        if field == "holder":
+            pm.account_holder = new_val
+        elif field == "number":
+            pm.account_number = new_val
+        elif field == "instructions":
+            pm.instructions = new_val
+        await db.commit()
+
+    await message.answer(
+        f"✅ Updated <b>{code}</b> ({field}) to <code>{new_val}</code>.",
+        reply_markup=back_pro_kb("pay:methods", "⬅️ Back to Payment Accounts"),
+        parse_mode="HTML",
+    )
 
 
 @admin_pro_router.callback_query(F.data.startswith("pay:pending:"))
@@ -894,7 +1039,7 @@ async def msg_pro_broadcast_preview(message: Message, state: FSMContext):
     )
 
 
-@admin_pro_router.callback_query(ProAdminFSM.confirming_broadcast, F.data == "pro:bcast:send")
+@admin_pro_router.callback_query(F.data == "pro:bcast:send")
 async def cb_pro_broadcast_send(callback: CallbackQuery, state: FSMContext, bot: Bot):
     if not is_pro_admin(callback.from_user.id):
         await callback.answer("Unauthorized.", show_alert=True)
