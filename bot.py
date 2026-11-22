@@ -212,15 +212,18 @@ async def cmd_start(message: Message, state: FSMContext):
         full_name = student.full_name
         plan_badge = format_plan_badge(student)
 
+    safe_name = html.escape(full_name or "Student")
     await message.answer(
-        f"🎓 <b>Welcome to QineSystems</b>\n"
-        f"Your digital learning companion for Ethiopian university students.\n\n"
-        f"👤 <b>Student:</b> {full_name}\n"
-        f"🔖 <b>Membership:</b> {plan_badge}\n"
-        f"📢 <b>Community:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
-        f"📚 Learn smarter. Practice consistently. Track your progress.\n\n"
-        f"Explore your courses, access study materials, prepare for exams, challenge yourself with quizzes, and get AI-powered learning support.\n\n"
-        f"Where would you like to start? 👇",
+        f"🎓 <b>Welcome to QineSystems, {safe_name}!</b>\n"
+        f"<i>Your digital study companion for Ethiopian university courses.</i>\n\n"
+        f"👤 <b>Account:</b> {safe_name} · <b>{plan_badge}</b>\n"
+        f"📢 <b>Updates:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
+        f"<b>✨ What you can do here:</b>\n"
+        f"• 📚 <b>Study:</b> Access modules, notes, worksheets &amp; past exams\n"
+        f"• 📝 <b>Practice:</b> Take timed quizzes &amp; daily challenges\n"
+        f"• 🤖 <b>Ask AI:</b> Solve math, summarize notes &amp; prep for exams\n"
+        f"• 📊 <b>Track:</b> Monitor your accuracy, streak &amp; leaderboard rank\n\n"
+        f"👇 <b>Tap a section below to begin:</b>",
         reply_markup=build_main_menu(message.from_user.id),
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -236,16 +239,20 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
         plan_badge = format_plan_badge(student)
         full_name = student.full_name
 
+
     text = (
         f"🎓 <b>QineSystems Dashboard</b>\n"
-        f"Learn. Practice. Improve. Achieve.\n\n"
-        f"Everything you need for a smarter university learning experience, all in one place.\n\n"
-        f"👤 <b>{full_name}</b> | <b>{plan_badge}</b>\n\n"
-        f"What would you like to work on today? 👇\n"
-        f"📢 <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>"
+        f"<i>Learn. Practice. Improve. Achieve.</i>\n\n"
+        f"👤 <b>{safe_name}</b> · <b>{plan_badge}</b>\n"
+        f"📢 <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
+        f"<b>Quick Actions:</b>\n"
+        f"• <b>Courses &amp; Materials:</b> Browse courses, notes, exams &amp; search\n"
+        f"• <b>Quiz &amp; Exams:</b> Test chapters &amp; build exam confidence\n"
+        f"• <b>AI Study Assistant:</b> Get step-by-step study &amp; exam help\n"
+        f"• <b>My Progress:</b> Check accuracy, XP &amp; daily streak\n\n"
+        f"👇 <b>What would you like to work on today?</b>"
     )
     await safe_edit_message(callback, text, reply_markup=build_main_menu(callback.from_user.id))
-
 
 # --- 2. Free Tools vs. Premium Tools Grouping ---
 @router.callback_query(F.data == "nav:free_tools")
