@@ -47,6 +47,7 @@ class ProAdminFSM(StatesGroup):
     confirming_broadcast = State()
     validating_csv = State()
     editing_pm_field = State()
+    adding_course = State()
 
 
 def pro_admin_home_kb(pending_count: int) -> InlineKeyboardMarkup:
@@ -308,19 +309,98 @@ async def cb_pro_questions(callback: CallbackQuery):
 
 
 @admin_pro_router.callback_query(F.data == "pro:subjects")
-async def cb_pro_subjects(callback: CallbackQuery):
+async def cb_pro_subjects(callback: CallbackQuery, state: FSMContext):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    await state.clear()
+    await callback.answer()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Add New Course", callback_data="pro:add_course")],
+        [
+            InlineKeyboardButton(text="📖 Bulk Add Chapters", callback_data="bulk:chapters"),
+            InlineKeyboardButton(text="📚 Batch Drop PDFs", callback_data="bulk:pdfs"),
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Toggle / Delete Subjects", callback_data="crud:courses:0"),
+            InlineKeyboardButton(text="📖 Manage Chapters", callback_data="crud:chapters:0"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Back to Control Center", callback_data="adm:home_pro")],
+    ])
+    await safe_edit_or_send(callback, "📚 <b>Subjects &amp; Content Management</b>", kb)
+
+
+@admin_pro_router.callback_query(F.data == "pro:add_course")
+async def cb_pro_add_course_prompt(callback: CallbackQuery, state: FSMContext):
     if not is_pro_admin(callback.from_user.id):
         await callback.answer("Unauthorized.", show_alert=True)
         return
     await callback.answer()
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📖 Bulk Add Chapters", callback_data="bulk:chapters")],
-        [InlineKeyboardButton(text="📚 Batch Drop PDFs", callback_data="bulk:pdfs")],
-        [InlineKeyboardButton(text="🔄 Toggle / Delete Subjects", callback_data="crud:courses:0")],
-        [InlineKeyboardButton(text="📖 Manage Chapters", callback_data="crud:chapters:0")],
-        [InlineKeyboardButton(text="⬅️ Back to Control Center", callback_data="adm:home_pro")],
-    ])
-    await safe_edit_or_send(callback, "📚 <b>Subjects &amp; Content Management</b>", kb)
+    await state.set_state(ProAdminFSM.adding_course)
+    await safe_edit_or_send(
+        callback,
+        "➕ <b>Add New Course</b>\n\n"
+        "Send the exact course name to add to the catalogue (for example: <code>Applied Mathematics I</code>):",
+        back_pro_kb("pro:subjects", "⬅️ Cancel"),
+    )
+
+
+@admin_pro_router.message(ProAdminFSM.adding_course, F.text & ~F.text.startswith("/"))
+async def msg_pro_add_course_save(message: Message, state: FSMContext):
+    if not is_pro_admin(message.from_user.id):
+        return
+    course_name = " ".join((message.text or "").split()).strip()
+    if not course_name:
+        await message.answer("⚠️ Course name cannot be empty. Send a valid course name.")
+        return
+    if len(course_name) > 150:
+        await message.answer("⚠️ Course name must be 150 characters or fewer.")
+        return
+
+    async with AsyncSessionLocal() as db:
+        existing = (
+            await db.execute(
+                select(Course).where(func.lower(Course.name) == course_name.lower())
+            )
+        ).scalar_one_or_none()
+        if existing:
+            await state.clear()
+            await message.answer(
+                f"⚠️ Course <b>{existing.name}</b> already exists (ID: <code>{existing.id}</code>).",
+                reply_markup=back_pro_kb(
+                    "pro:subjects",
+                    "⬅️ Back to Subjects",
+                    extra_rows=[[InlineKeyboardButton(text="➕ Add Another Course", callback_data="pro:add_course")]],
+                ),
+                parse_mode="HTML",
+            )
+            return
+
+        new_course = Course(name=course_name, is_active=True)
+        db.add(new_course)
+        await db.commit()
+        await db.refresh(new_course)
+        created_id = new_course.id
+        created_name = new_course.name
+
+    await state.clear()
+    await message.answer(
+        f"✅ <b>Course Added!</b>\n\n"
+        f"• Name: <b>{created_name}</b>\n"
+        f"• Course ID: <code>{created_id}</code>\n"
+        f"• Status: 🟢 Active",
+        reply_markup=back_pro_kb(
+            "pro:subjects",
+            "⬅️ Back to Subjects",
+            extra_rows=[
+                [
+                    InlineKeyboardButton(text="➕ Add Another Course", callback_data="pro:add_course"),
+                    InlineKeyboardButton(text="📖 Bulk Add Chapters", callback_data="bulk:chapters"),
+                ]
+            ],
+        ),
+        parse_mode="HTML",
+    )
 
 
 @admin_pro_router.callback_query(F.data == "pro:categories")
