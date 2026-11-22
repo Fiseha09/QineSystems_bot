@@ -160,39 +160,24 @@ class DailyChallengeFlow(StatesGroup):
 
 
 # --- Navigation Builders ---
+
 def build_main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     rows = [
         [
-            InlineKeyboardButton(text="🟢 Freshman Free", callback_data="nav:free_tools"),
-            InlineKeyboardButton(text="💎 Freshman Pro", callback_data="nav:premium_tools"),
+            InlineKeyboardButton(text="📚 Courses & Materials", callback_data="nav:my_courses"),
+            InlineKeyboardButton(text="📝 Quiz & Exams", callback_data="feat:quiz"),
+        ],
+        [
+            InlineKeyboardButton(text="🤖 AI Study Assistant", callback_data="feat:ai_assistant"),
+            InlineKeyboardButton(text="📊 My Progress", callback_data="nav:my_progress"),
         ],
         [
             InlineKeyboardButton(text="⏱ Quiz", callback_data="feat:quiz"),
             InlineKeyboardButton(text="🎓 Final Exams", callback_data="feat:final_exams"),
         ],
         [
-            InlineKeyboardButton(text="🤖 AI Study Assistant", callback_data="feat:ai_assistant"),
-            InlineKeyboardButton(text="🔍 Search", callback_data="feat:search"),
-        ],
-        [
-            InlineKeyboardButton(text="📖 My Courses", callback_data="nav:my_courses"),
-            InlineKeyboardButton(text="📊 My Progress", callback_data="nav:my_progress"),
-        ],
-        [
-            InlineKeyboardButton(text="⚡ Daily Challenge", callback_data="dc:hub"),
-            InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard:weekly"),
-        ],
-        [
-            InlineKeyboardButton(text="👑 Premium", callback_data="nav:membership"),
-            InlineKeyboardButton(text="🎁 Referral", callback_data="nav:referral"),
-        ],
-        [
-            InlineKeyboardButton(text="🗣 comment & Support", callback_data="nav:help"),
-            InlineKeyboardButton(text="🤖 AI Help", callback_data="nav:ai_help"),
-        ],
-        [
-            InlineKeyboardButton(text="📂 Study Resources", callback_data="nav:resources_hub"),
-            InlineKeyboardButton(text="👥 Community", callback_data="nav:community"),
+            InlineKeyboardButton(text="💎 Membership & Referrals", callback_data="nav:membership"),
+            InlineKeyboardButton(text="🆘 Support & Community", callback_data="nav:help"),
         ],
     ]
 
@@ -1409,6 +1394,7 @@ async def cb_membership(callback: CallbackQuery):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         row1,
+        [InlineKeyboardButton(text="🎁 Referral Hub", callback_data="nav:referral")],
         back_and_home_row("nav:main"),
     ])
     await safe_edit_message(callback, "\n".join(comparison_lines), reply_markup=kb)
@@ -1697,11 +1683,26 @@ async def cb_my_courses(callback: CallbackQuery):
     await callback.answer()
     async with AsyncSessionLocal() as db:
         courses = (await db.execute(select(Course).where(Course.is_active == True).order_by(Course.name))).scalars().all()
-    lines = "\n".join([f"{i+1}. {c.name}" for i, c in enumerate(courses)])
+
+    lines = "\n".join([f"{i+1}. {html.escape(c.name)}" for i, c in enumerate(courses)])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔍 Search", callback_data="feat:search"),
+            InlineKeyboardButton(text="🎓 Final Exams", callback_data="feat:final_exams"),
+        ],
+        [
+            InlineKeyboardButton(text="📂 Study Resources", callback_data="nav:resources_hub"),
+            InlineKeyboardButton(text="🟢 Freshman Free", callback_data="nav:free_tools"),
+        ],
+        [
+            InlineKeyboardButton(text="💎 Freshman Pro", callback_data="nav:premium_tools"),
+        ],
+        back_and_home_row("nav:main"),
+    ])
     await safe_edit_message(
         callback,
-        f"📖 <b>Catalogue ({len(courses)} Courses)</b>\n\n{lines}",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row("nav:main")]),
+        f"📖 <b>Courses &amp; Study Materials ({len(courses)} Courses)</b>\n\n{lines}",
+        reply_markup=kb,
     )
 
 
@@ -2104,14 +2105,18 @@ async def cb_help(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text=label, callback_data=f"sup:cat:{key}")]
         for key, (label, _) in SUPPORT_TOPICS.items()
     ]
+    rows.append([
+        InlineKeyboardButton(text="🤖 AI Help", callback_data="nav:ai_help"),
+        InlineKeyboardButton(text="👥 Community & Channel", callback_data="nav:community"),
+    ])
     rows.append(back_and_home_row("nav:main"))
 
     text = (
-        "🆘 <b>QineSystems Student Desk</b>\n\n"
-        "Stuck on a module, receipt, quiz, or referral? Pick a topic below to open a ticket:"
+        "🆘 <b>QineSystems Student Desk &amp; Community</b>\n\n"
+        "Stuck on a module, receipt, quiz, or referral? Pick a topic below to open a ticket, "
+        "or use AI Help or visit the official QineSystems community links:"
     )
     await safe_edit_message(callback, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
-
 
 @router.callback_query(F.data.startswith("sup:cat:"))
 async def cb_support_category(callback: CallbackQuery, state: FSMContext):
