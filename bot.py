@@ -242,7 +242,7 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
     text = (
         f"🎓 <b>QineSystems Dashboard</b>\n"
         f"<i>Learn. Practice. Improve. Achieve.</i>\n\n"
-        f"👤 <b>{safe_name}</b> · <b>{plan_badge}</b>\n"
+        f"👤 <b>{full_name}</b> · <b>{plan_badge}</b>\n"
         f"📢 <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
         f"<b>Quick Actions:</b>\n"
         f"• <b>Courses &amp; Materials:</b> Browse courses, notes, exams &amp; search\n"
