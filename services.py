@@ -15,7 +15,8 @@ CATALOGUE_26_COURSES = [
     "Chemistry", "Civics", "Economics", "Emerging Technology",
     "English I", "English II", "Entrepreneurship", "Geography",
     "Global Affairs", "History", "Inclusiveness", "Logic",
-    "Math (Natural)", "Math (Social)", "Physics", "Psychology",
+    "Math (Natural)", "Math (Social)", "Physics", "Psychology", "Networking"
+    "Database", "Electric city"
 ]
 
 DEFAULT_FEATURES = [
