@@ -17,14 +17,20 @@ from services import get_or_create_student, check_feature_entitlement
 
 ai_router = Router()
 
-AI_NAME = "Qine"
+AI_NAME = "AlgoMage"
 MAX_HISTORY_TURNS = 8  # Up to 8 user/model exchanges (16 messages) kept in session
 AI_CTX_COURSES_PER_PAGE = 6
 
+YEAR_SHORT_TAG: dict[str, str] = {
+    "1st Year": "1st Yr",
+    "2nd Year": "2nd Yr",
+    "3rd Year": "3rd Yr",
+}
+
 TOOL_MODEL_PREFERENCE: dict[str, str] = {
-    "math": "gemini-3.8-flash",
-    "code": "gemini-3.8-flash",
-    "exam": "gemini-4-hydrogen",
+    "math": "gemini-2.5-flash",
+    "code": "gemini-2.5-flash",
+    "exam": "gemini-2.5-flash",
 }
 
 
@@ -309,121 +315,56 @@ QINESYSTEMS PLATFORM & WORKFLOW GUIDE
 - Platform Type: AI-powered learning and academic support platform for Ethiopian university students.
 - Core Philosophy: Learn. Understand. Practice. Grow.
 - Mission: To make academic learning more accessible, structured, engaging, and effective by combining study resources, interactive practice, and AI-powered learning assistance.
-
+- BUILT by Fiseha CEO and co-founder of QineSystems A computer Science student
 2. OVERALL STUDENT WORKFLOW
 
 MAIN MENU
 The Main Menu is the central navigation hub through which students access:
-- My Profile
-- My Courses
-- Courses & Study Materials
-- Exam Trainer
-- Practice Quizzes
-- AI Study Tools (Qine)
+- Academic Year Hubs (1st Year, 2nd Year, 3rd Year)
+- AI Study & Help (Qine)
+- Daily Challenge
+- My Progress & Leaderboard
 - Membership & Plans
-- Learning Progress
-- Help & Support
+- Support & Community
+- Referral Hub
 
 3. COURSES & STUDY MATERIALS
-- Students browse available academic courses based on their selected semester and academic stream.
+- Students browse available academic courses by year level (1st Year, 2nd Year, 3rd Year).
 - Each course is organized into chapters or topics.
-- Students can access available learning materials, including PDF documents, lecture notes, modules, presentations, and other uploaded resources.
-- Resources are managed by administrators and may have different access levels: Free, Qine Plus, or Qine Pro.
+- Students can access available learning materials, including PDF documents, lecture notes, modules, worksheets, reference books, and past exams (COC Past Exams apply to 1st Year only).
 - Premium resources are protected through Telegram content protection where supported, restricting forwarding and saving from the chat.
-- Resource availability depends on publication status, student eligibility, and membership permissions.
 
-4. QUIZZES & EXAM TRAINER
-
-PRACTICE QUIZZES
-- Students can practise multiple-choice questions organized by course, chapter, topic, and difficulty.
-- Quizzes help students test their understanding, reinforce knowledge, and identify learning gaps.
-- Available quiz access may depend on the student's membership plan.
-
-EXAM TRAINER
-- Provides structured exam preparation beyond ordinary practice quizzes.
-- May include mock exams, timed practice, chapter-based practice, topic challenges, mistake review, performance analysis, and exam preparation planning.
-- Students can review their scores, correct answers, explanations, and previous attempts where supported.
-- Timed and advanced exam features may be restricted to eligible premium members.
+4. QUIZZES, DAILY CHALLENGE & LEADERBOARD
+- Students can practice multiple-choice questions organized by course, chapter, and difficulty.
+- Daily Challenges and Leaderboards help students build study habits and track rankings.
 
 5. AI ASSISTANT SUITE — QINE
 Qine is the AI-powered study assistant integrated into QineSystems.
 
 It provides eight specialized study modes:
-
-1. AI Tutor (tutor): Explains academic concepts step by step and helps students understand difficult lessons.
-2. Ask AI (ask): Answers general academic questions and provides learning assistance.
-3. Math Solver (math): Helps solve mathematical problems with clear, step-by-step explanations.
-4. English Coach (english): Supports English learning, grammar, vocabulary, writing, and communication practice.
-5. Coding Assistant (code): Helps students understand programming concepts, write code, debug errors, and develop problem-solving skills.
-6. Exam Preparation (exam): Supports exam revision, practice, and preparation strategies.
-7. Document Q&A (doc): Allows students to ask questions about supported uploaded study documents.
-8. Summarize Materials (sum): Helps students turn lengthy study materials into clearer, structured summaries.
+1. AI Tutor (tutor)
+2. Ask AI (ask)
+3. Math Solver (math)
+4. English Coach (english)
+5. Coding Assistant (code)
+6. Exam Preparation (exam)
+7. Document Q&A (doc)
+8. Summarize Materials (sum)
 
 CONTEXTUAL AI ASSISTANCE
 - Students may select a course and a specific resource or PDF to provide context for their questions, where supported.
-- Qine can use the selected material to provide more relevant explanations and answers.
 - Students can continue multi-turn conversations within the same chat session or start a New Chat.
-- AI responses should prioritize clarity, accuracy, educational value, and step-by-step explanations.
-- Students should be encouraged to understand concepts rather than blindly copy answers.
 
 6. MEMBERSHIP, PREMIUM FEATURES & PAYMENTS
-
-FREE PLAN
-- Provides access to available free resources and basic learning features.
-- Includes a limited daily AI usage quota.
-- Provides access to eligible free quizzes and study tools.
-QINE PLUS
-- Provides additional learning resources and premium study features.
-- Offers higher daily AI usage limits than the Free plan.
-- Unlocks eligible premium quizzes, exam preparation tools, and materials.
-
-QINE PRO
-- Provides the highest level of access among the available membership plans.
-- Includes Qine Plus benefits and additional advanced AI study features.
-- Offers higher AI usage limits and access to eligible Pro-only resources and tools.
-
-PAYMENT & SUBSCRIPTION WORKFLOW
-- Students open Membership to compare available plans and review their benefits.
-- Students select a plan and follow the displayed payment instructions.
-- After making payment, students submit their transaction receipt through the bot.
-- Payments are manually reviewed and approved by authorized administrators.
-- Once approved, the student's subscription and corresponding access permissions are updated.
-- Students can check their current plan and subscription status through My Subscription.
+- FREE PLAN: Basic learning access and starter daily AI quota.
+- QINE PLUS & QINE PRO: Expanded access to quizzes, study resources, and higher daily AI quotas after receipt approval.
 - Failed or rate-limited AI requests should not consume the student's daily AI quota.
 
-7. LEARNING PROGRESS & STUDENT DEVELOPMENT
-- Students can access their learning progress and available performance statistics.
-- Progress tracking may include quiz scores, completed attempts, accuracy, learning activity, and weak areas.
-- Where supported, students can use their performance history to identify topics that need more attention.
-- The platform encourages consistent practice, independent learning, and continuous improvement.
+7. HELP & SUPPORT
+- AI-Assisted Help provides instant guidance on how to use platform features.
+- Students can also open a support ticket for human review by administrators.
 
-8. HELP & SUPPORT
-- Help & Support connects students with the QineSystems support team for assistance.
-- Students may use available support channels or submit support requests through the bot.
-- AI-Assisted Help provides instant guidance, answers common questions, and explains how to use platform features.
-- For payment, account, or technical issues requiring human assistance, students should contact the support team.
-
-9. PLATFORM LEADERSHIP & OFFICIAL CONTACT
-
-FOUNDER & CEO
-- Name/Professional Identity: AlgoMage
-- Role: Founder & Chief Executive Officer (CEO), QineSystems
-- Academic Background: Computer Science student at Bahir Dar University (BDU).
-- Telegram Contact: @algo_mage
-- Email: algomage.57@gmail.com
-
-For official inquiries, partnerships, collaboration, platform feedback, and business-related communication, contact the Founder & CEO through the official contact details above.
-
-10. QINESYSTEMS COMMUNICATION PRINCIPLES
-- Be student-friendly, professional, respectful, and easy to understand.
-- Explain platform features accurately and never claim a feature is available unless it is actually supported.
-- Give clear, practical, and educational answers.
-- Guide students through the correct bot menus and workflows.
-- Never invent subscription status, payment confirmation, quiz results, or account information.
-- Direct students to authorized administrators for payment verification and account-specific issues.
-- Encourage students to learn, understand, practise, and grow.
-
-QineSystems: Learn. Understand. Practice. Grow.
+QineSystems: Learn. Understand. Practice. Grow. 
 """.strip()
 
 HELP_TOPICS: dict[str, tuple[str, str]] = {
@@ -434,14 +375,14 @@ HELP_TOPICS: dict[str, tuple[str, str]] = {
 Whether you're just getting started or preparing for finals, choose the plan that fits your study goals:
 
 🆓 <b>Free Tier (<code>FREE</code>)</b>
-• Access to free freshman modules, general notes, and basic resources
-• A starter daily quota for the <b>AlgoMage AI Assistant Suite</b>
-• Great for casual browsing and quick lookups
+- Access to free course modules, notes, and basic resources
+- A starter daily quota for the <b>QineSystems AI Suite</b>
+- Great for casual browsing and quick lookups
 
-🚀 <b>Premium Plans (Qine Plus & Qine Pro)</b>
-• <b>Full Library Access:</b> Unlock protected past exams, exclusive worksheets, and premium guides
-• <b>Higher AI Limits:</b> Generous daily <b>Qine AI</b> quotas for deep tutoring, math solving, and document Q&A
-• <b>Exam Advantage:</b> Built for serious semester prep without hitting daily limits
+🚀 <b>Premium Plans (Qine Plus &amp; Qine Pro)</b>
+- <b>Full Library Access:</b> Unlock protected past exams, exclusive worksheets, and premium guides
+- <b>Higher AI Limits:</b> Generous daily <b>Qine AI</b> quotas for deep tutoring, math solving, and document Q&amp;A
+- <b>Exam Advantage:</b> Built for serious semester prep without hitting daily limits
 
 💳 <b>How to Upgrade</b>
 1. Go to the <b>Main Menu</b> and tap <b>Membership</b>
@@ -450,76 +391,69 @@ Whether you're just getting started or preparing for finals, choose the plan tha
 4. Once verified by an admin, your account upgrades automatically!
 
 ⚡ <b>Fair Quota Guarantee</b>
-• Only <b>successful</b> AI responses deduct 1 daily quota unit
-• Failed or rate-limited requests are <b>never</b> deducted from your balance""",
-    )
-,
-        "about": (
-            "🏛 About QineSystems",
-            """<b>🏛 About QineSystems</b>
+- Only <b>successful</b> AI responses deduct 1 daily quota unit
+- Failed or rate-limited requests are <b>never</b> deducted from your balance""",
+    ),
+    "about": (
+        "🏛 About QineSystems",
+        """<b>🏛 About QineSystems</b>
 
-- <b>QineSystems</b> (<code>@QineSystems_bot</code> · <code>@QineSystems</code>) supports university students across Ethiopia with structured courses, PDFs/resources, practice quizzes, and <b>Qine</b> AI study modes.
+- <b>QineSystems</b> (<code>@QineSystems_bot</code> · <code>@QineSystems</code>) supports university students across Ethiopia across <b>1st, 2nd, and 3rd Year</b> courses, PDFs/resources, practice quizzes, daily challenges, and <b>Qine</b> AI study modes.
 - Built around <b>Learn, understand, practice, and grow</b>—focusing on real comprehension and exam readiness.
 
-<b>QineSystems</b> is an AI-powered learning and academic support platform specially designed for Ethiopian university students! 🇪🇹🎓 
-
-Our core philosophy is <b>Learn. Understand. Practice. Grow.</b> 🌱✨ Our mission is to make your academic journey much more accessible, structured, engaging, and effective by bringing together study resources, interactive practice tools, and AI-powered learning assistance right inside Telegram (<code>@QineSystems_bot</code>).
-
 <b>Here is a quick snapshot of what you can dive into using our Main Menu:</b>
-- 📚 <b>Courses & Study Materials:</b> Browse courses based on your semester and stream, and check out available materials like modules, lecture notes, and PDFs.
-- 📝 <b>Exam Trainer & Practice Quizzes:</b> Test your knowledge, practice chapter-by-chapter, and prep for your exams!
-- 🤖 <b>AI Study Assistant (Qine):</b> Chat with 8 specialized study modes—including AI Tutor, Math Solver, English Coach, Coding Assistant, and more—to help break down difficult concepts step-by-step.
-- 💳 <b>Membership & Plans:</b> Choose between our Free plan, Qine Plus, and Qine Pro to unlock higher AI daily quotas and premium features.
-- 📊 <b>Learning Progress:</b> Track your quiz scores, accuracy, and study activity to see how you're growing.
-
-Want to explore any of these specific features or need help finding your way around the bot? Just let me know! 🚀😊""",
+- 🎓 <b>1st / 2nd / 3rd Year Hubs:</b> Browse year-specific courses, modules, lecture notes, exams, quizzes, and study resources (COC Past Exams apply to 1st Year only).
+- 🤖 <b>AI Study &amp; Help (Qine):</b> Chat with 8 specialized study modes—including AI Tutor, Math Solver, English Coach, Coding Assistant, and more.
+- ⚡ <b>Daily Challenge &amp; 🏆 Leaderboard:</b> Practice daily challenges and track your XP standing.
+- 💳 <b>Membership &amp; Plans:</b> Choose between Free, Qine Plus, and Qine Pro to unlock higher daily AI quotas and premium features.
+- 📊 <b>My Progress:</b> Track your quiz scores, accuracy, and study streak.""",
     ),
-
-        "ai": (
+    "ai": (
         "🤖 How Qine AI & Context Work",
         """<b>🤖 How Qine AI &amp; Context Work</b>
 
 Get personalized, course-aware study help directly inside Telegram by combining specialized AI modes with your actual university materials.
 
 <b>1️⃣ Choose Your Study Mode</b>
-Open the <b>AI Assistant Suite</b> and select the tool that fits your task:
-• 🧑‍🏫 <b>AI Tutor</b> &amp; ❓ <b>Ask AI</b> – Step-by-step concept breakdowns and quick answers
-• ➗ <b>Math Solver</b> &amp; 💻 <b>Coding Assistant</b> – Guided equations, proofs, and code debugging
-• 🗣 <b>English Coach</b> – Grammar, essay structure, and communication practice
-• 📝 <b>Exam Prep</b>, 📄 <b>Document Q&amp;A</b> &amp; 📋 <b>Summarize Materials</b> – Practice questions, PDF Q&amp;A, and concise study notes
+Open the <b>AI Study Suite</b> and select the tool that fits your task:
+- 🧑‍🏫 <b>AI Tutor</b> &amp; ❓ <b>Ask AI</b> – Step-by-step concept breakdowns and quick answers
+- ➗ <b>Math Solver</b> &amp; 💻 <b>Coding Assistant</b> – Guided equations, proofs, and code debugging
+- 🗣 <b>English Coach</b> – Grammar, essay structure, and communication practice
+- 📝 <b>Exam Prep</b>, 📄 <b>Document Q&amp;A</b> &amp; 📋 <b>Summarize Materials</b> – Practice questions, PDF Q&amp;A, and concise study notes
 
 <b>2️⃣ Attach Course &amp; PDF Context (Pro Tip! 💡)</b>
-• Tap <b>Attach Course / PDF Context</b> to select a specific <b>Course</b> and <b>Resource / PDF</b> from our library.
-• Once attached, <b>Qine</b> grounds its explanations, examples, and summaries directly in that exact lecture note or module!
+- Tap <b>Change Course / PDF</b> to select a specific <b>Course</b> and <b>Resource / PDF</b> from our library.
+- Once attached, <b>Qine</b> grounds its explanations, examples, and summaries directly in that exact lecture note or module!
 
 <b>3️⃣ Natural Follow-Up Memory</b>
-• Ask follow-up questions in the same chat—<b>Qine</b> remembers earlier messages in your active session so you can dig deeper without repeating yourself.
-• Ready to switch topics? Tap <b>🧹 New Chat</b> or pick a different AI mode to start fresh.""",
+- Ask follow-up questions in the same chat—<b>Qine</b> remembers earlier messages in your active session so you can dig deeper without repeating yourself.
+- Ready to switch topics? Tap <b>🧹 New Chat</b> or pick a different AI mode to start fresh.""",
     ),
-
-        "workflow": (
+    "workflow": (
         "🗺 Bot Workflow & Quizzes",
         """<b>🗺 Overall Bot Workflow &amp; Quizzes</b>
 
 <b>QineSystems</b> is designed around a simple, effective study loop—<b>Learn → Practice → Master</b>—so you can stay organized from day one of the semester through finals.
 
-<b>1️⃣ Learn: Courses &amp; Study Materials 📚</b>
-• Browse organized subjects, lecture notes, modules, and past exam PDFs from the <b>Main Menu</b>.
-• <i>Content Protection Note:</i> To protect exclusive academic content, <b>Premium materials</b> have forwarding and saving disabled inside Telegram.
+<b>1️⃣ Pick Your Year &amp; Learn 📚</b>
+- Choose <b>1st Year</b>, <b>2nd Year</b>, or <b>3rd Year</b> from the Main Menu to view courses, modules, notes, exams, and study resources for your year.
+- <i>Content Protection Note:</i> To protect exclusive academic content, <b>Premium materials</b> have forwarding and saving disabled inside Telegram.
 
-<b>2️⃣ Practice: Interactive Quizzes 📝</b>
-• Test your knowledge with chapter-by-chapter and topic-based quizzes.
-• Get instant feedback on every question to check your comprehension, spot weak areas early, and track your accuracy over time.
+<b>2️⃣ Practice: Quizzes &amp; Daily Challenges 📝</b>
+- Test your knowledge with chapter-by-chapter quizzes and daily challenges.
+- Review explanations and track your accuracy on <b>My Progress</b> and the <b>Leaderboard</b>.
 
 <b>3️⃣ Master: AI Study Support 🤖</b>
-• Stuck on a tough quiz question or dense PDF? Jump into the <b>AI Assistant Suite</b>, attach your course material, and let <b>Qine</b> walk you through it step by step.
-
-<b>4️⃣ Help &amp; Support 🛠</b>
-• Need account assistance, payment verification help, or have feedback? Open <b>Help &amp; Support</b> to submit a direct support ticket to our team.
-• Want quick tips on using the bot? Stay right here and ask <b>Qine</b> how any feature works!""",
+- Stuck on a tough quiz question or dense PDF? Jump into <b>AI Study &amp; Help</b>, attach your course material, and let <b>Qine</b> walk you through it step by step.""",
     ),
-
 }
+
+
+def _course_ctx_label(course) -> str:
+    yr = (getattr(course, "year_level", None) or "1st Year").strip()
+    tag = YEAR_SHORT_TAG.get(yr, yr)
+    cname = (getattr(course, "name", None) or f"Course #{course.id}").strip()[:16]
+    return f"[{tag}] {cname}"
 
 
 # ============================================================
@@ -529,7 +463,7 @@ Open the <b>AI Assistant Suite</b> and select the tool that fits your task:
 def _resolve_model_candidates(tool_key: str) -> list[str]:
     """Resolve preferred and fallback Gemini models."""
     load_dotenv(override=True)
-    env_model = os.getenv("AI_MODEL_NAME", "gemini-3.5-flash-lite").strip()
+    env_model = os.getenv("AI_MODEL_NAME", "").strip()
     if env_model.startswith("models/"):
         env_model = env_model[len("models/"):]
 
@@ -537,9 +471,9 @@ def _resolve_model_candidates(tool_key: str) -> list[str]:
     candidates = [
         preferred,
         env_model,
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-3.8-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
     ]
 
     ordered: list[str] = []
@@ -577,7 +511,7 @@ async def _run_with_typing_and_status(
             if not done_event.is_set():
                 try:
                     await status_msg.edit_text(
-                        f"\n<i>⏳ Still working — structuring steps &amp; explanation...</i>",
+                        f"{status_prefix}\n<i>⏳ Still working — structuring steps &amp; explanation...</i>",
                         parse_mode="HTML",
                     )
                 except Exception:
@@ -750,13 +684,13 @@ async def cb_open_ai_help(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
     basic_guide = (
-        "  🆘 <b>QineSystems AI-Assisted Help</b>\n\n"
+        "🆘 <b>QineSystems AI-Assisted Help</b>\n\n"
         "<b>Basic Guide to QineSystems:</b>\n\n"
-        "• <b>Courses &amp; PDFs:</b> Browse subjects, chapters, and study files (premium files have content protection enabled).\n"
-        "• <b>Quizzes:</b> Practice questions to test your understanding.\n"
+        "• <b>1st / 2nd / 3rd Year Hubs:</b> Browse year-specific courses, chapters, notes, exams, and study files (COC Past Exams apply to 1st Year only).\n"
+        "• <b>Quizzes &amp; Daily Challenge:</b> Practice questions to test your understanding and track your progress.\n"
         "• <b>Qine AI Suite:</b> Study with <b>Qine</b> across 8 modes and attach a Course or Resource/PDF for context.\n"
         "• <b>Free vs. Premium:</b> Free users get baseline access and daily quota; paid plans increase daily AI limits and unlock premium features after receipt approval.\n"
-        "• <b>Support:</b> Use existing <b>Help &amp; Support</b> for direct tickets, or ask any question right here in chat.\n\n"
+        "• <b>Support:</b> Use <b>Support &amp; Community</b> for direct tickets, or ask any question right here in chat.\n\n"
         "Tap a button below <b>or type any question</b> to ask <b>Qine</b>:"
     )
     await _safe_edit(callback, basic_guide, _ai_help_kb())
@@ -805,7 +739,7 @@ async def msg_ai_help_question(message: Message, state: FSMContext):
         "You are QineSystems Help Assistant. Answer questions accurately using ONLY the provided "
         "QineSystems Platform & Workflow Guide and live configuration data. Do not invent prices, "
         "policies, or features that are not stated. If something is not configured or not specified "
-        "in the platform data, say so honestly and direct the student to Membership or comment & Support and send their Questions to the admin or CEO(AlgoMage)."
+        "in the platform data, say so honestly and direct the student to Membership or Support & Community."
     )
     ok, reply = await _run_with_typing_and_status(
         message=message,
@@ -885,7 +819,7 @@ async def cb_select_ai_tool(callback: CallbackQuery, state: FSMContext):
         callback,
         f"<b>{html.escape(title)}</b>\n"
         f"📊 <b>Daily AI Quota:</b> <code>{used_quota} / {max_quota}</code> used\n"
-        f"📚 <b>Context:</b> <code>General Freshman Curriculum</code>\n\n"
+        f"📚 <b>Context:</b> <code>General University Curriculum</code>\n\n"
         f"✍️ <b>Send your question, math problem, code snippet, or study text below:</b>",
         kb,
     )
@@ -895,7 +829,7 @@ async def cb_select_ai_tool(callback: CallbackQuery, state: FSMContext):
 async def cb_reset_ai_chat(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     tool_key = data.get("ai_tool", "ask")
-    course_label = data.get("course_label", "General Freshman Curriculum")
+    course_label = data.get("course_label", "General University Curriculum")
     title, _ = AI_TOOL_PROMPTS.get(tool_key, AI_TOOL_PROMPTS["ask"])
 
     await state.update_data(ai_history=[])
@@ -919,12 +853,10 @@ def _ai_ctx_course_kb(courses: list, page: int) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for i in range(0, len(chunk), 2):
         c1 = chunk[i]
-        c1_name = (getattr(c1, "name", None) or f"Course #{c1.id}").strip()[:22]
-        row = [InlineKeyboardButton(text=c1_name, callback_data=f"ai_ctx_crs:{c1.id}")]
+        row = [InlineKeyboardButton(text=_course_ctx_label(c1), callback_data=f"ai_ctx_crs:{c1.id}")]
         if i + 1 < len(chunk):
             c2 = chunk[i + 1]
-            c2_name = (getattr(c2, "name", None) or f"Course #{c2.id}").strip()[:22]
-            row.append(InlineKeyboardButton(text=c2_name, callback_data=f"ai_ctx_crs:{c2.id}"))
+            row.append(InlineKeyboardButton(text=_course_ctx_label(c2), callback_data=f"ai_ctx_crs:{c2.id}"))
         rows.append(row)
 
     if total_pages > 1:
@@ -947,7 +879,7 @@ async def cb_ai_ctx_page(callback: CallbackQuery, state: FSMContext):
     page_s = callback.data.split(":", 1)[1]
     page = int(page_s) if page_s.isdigit() else 0
     async with AsyncSessionLocal() as db:
-        stmt = select(Course).order_by(Course.name)
+        stmt = select(Course).order_by(Course.year_level, Course.name)
         if hasattr(Course, "is_active"):
             stmt = stmt.where(Course.is_active.is_(True) | Course.is_active.is_(None))
         courses = (await db.execute(stmt)).scalars().all()
@@ -963,7 +895,7 @@ async def cb_pick_ai_course_context(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Loading courses...")
     try:
         async with AsyncSessionLocal() as db:
-            stmt = select(Course).order_by(Course.name)
+            stmt = select(Course).order_by(Course.year_level, Course.name)
             if hasattr(Course, "is_active"):
                 stmt = stmt.where(Course.is_active.is_(True) | Course.is_active.is_(None))
             courses = (await db.execute(stmt)).scalars().all()
@@ -1073,9 +1005,10 @@ async def cb_pick_ai_resource_context(callback: CallbackQuery, state: FSMContext
                 return
 
             course_name = (getattr(course, "name", None) or f"Course #{course.id}").strip()
+            yr_label = (getattr(course, "year_level", None) or "1st Year").strip()
             items = await db.run_sync(lambda sync_db: _find_course_items_sync_helper(sync_db, course.id))
 
-        await state.update_data(ctx_course_id=course.id, ctx_course_name=course_name)
+        await state.update_data(ctx_course_id=course.id, ctx_course_name=f"{course_name} ({yr_label})")
         await state.set_state(AIStudyFSM.choosing_context_resource)
 
         rows: list[list[InlineKeyboardButton]] = [
@@ -1095,7 +1028,7 @@ async def cb_pick_ai_resource_context(callback: CallbackQuery, state: FSMContext
         await _safe_edit(
             callback,
             f"📄 <b>Step 2 of 2: Choose a Course Resource / Study Note</b>\n"
-            f"Course: <b>{html.escape(course_name)}</b>{extra_hint}\n"
+            f"Course: <b>{html.escape(course_name)}</b> (<i>{html.escape(yr_label)}</i>){extra_hint}\n"
             f"Select a resource/note below if you want specified support or use the whole course:",
             InlineKeyboardMarkup(inline_keyboard=rows),
         )
@@ -1132,13 +1065,13 @@ async def cb_set_ai_resource_context(callback: CallbackQuery, state: FSMContext)
         label = f"{course_name} · {res_title}"
         excerpt_block = f"\nSelected Study Note / Resource Excerpt:\n{excerpt}" if excerpt else ""
         context_str = (
-            f"Ethiopian University Course: {course_name}\n"
+            f"University Course: {course_name}\n"
             f"Selected Study Note / Resource Name: {res_title}"
             f"{excerpt_block}"
         )
     else:
         label = course_name
-        context_str = f"Ethiopian University Course: {course_name}"
+        context_str = f"University Course: {course_name}"
 
     await state.update_data(
         course_context=context_str,
@@ -1330,8 +1263,8 @@ async def msg_process_ai_prompt(message: Message, state: FSMContext):
 
     data = await state.get_data()
     tool_key = data.get("ai_tool", "ask")
-    course_context = data.get("course_context", "General Freshman Curriculum")
-    course_label = data.get("course_label", "General Freshman Curriculum")
+    course_context = data.get("course_context", "General University Curriculum")
+    course_label = data.get("course_label", "General University Curriculum")
     history: list[dict[str, str]] = list(data.get("ai_history") or [])
     is_first_turn = len(history) == 0
     title, sys_prompt = AI_TOOL_PROMPTS.get(tool_key, AI_TOOL_PROMPTS["ask"])

@@ -2618,6 +2618,11 @@ async def _get_referral_summary(db, student: Student, bot_username: str) -> dict
     total_earned_etb = approved_count * REFERRAL_REWARD_ETB
     ref_link = f"https://t.me/{bot_username}?start={student.referral_code}"
 
+    invited_names = [
+        html.escape((s.full_name or f"Student #{str(s.telegram_id)[-4:]}").strip())
+        for s in referred_students[:5]
+    ]
+
     return {
         "code": student.referral_code,
         "link": ref_link,
@@ -2626,6 +2631,7 @@ async def _get_referral_summary(db, student: Student, bot_username: str) -> dict
         "pending": pending_count,
         "success_rate": success_rate,
         "earned_etb": total_earned_etb,
+        "invited_names": invited_names,
     }
 
 
@@ -2637,22 +2643,27 @@ async def cb_referral(callback: CallbackQuery):
         bot_info = await callback.bot.get_me()
         info = await _get_referral_summary(db, student, bot_info.username)
 
+    invited_section = ""
+    if info["invited_names"]:
+        extra = f" (+{info['sent'] - len(info['invited_names'])} more)" if info["sent"] > len(info["invited_names"]) else ""
+        invited_section = f"\n👥 <b>Invited Friends:</b> {', '.join(info['invited_names'])}{extra}\n"
+
     text = (
         f"🎁 <b>Referral Hub</b>\n\n"
         f"Earn <b>{REFERRAL_REWARD_ETB} ETB</b> for every successful student referral.\n"
-        f"<i>Referrals count once your invited friend activates a paid plan.</i>\n\n"
+        f"<i>Referrals count as Approved once your invited friend activates a paid plan.</i>\n\n"
         f"🎫 <b>Your Invite Code:</b> <code>{html.escape(info['code'])}</code>\n"
         f"🔗 <b>Your Invite Link:</b> <code>{html.escape(info['link'])}</code>\n\n"
         f"📊 <b>Your Stats</b>\n"
-        f"• Sent: <b>{info['sent']}</b>\n"
-        f"• ✅ Approved: <b>{info['approved']}</b>\n"
-        f"• ⏳ Pending: <b>{info['pending']}</b>\n"
-        f"• 📈 Success Rate: <b>{info['success_rate']:.0f}%</b>\n"
-        f"• 💰 Total Earned: <b>{info['earned_etb']} ETB</b>\n\n"
+        f"• Registered via Link: <b>{info['sent']}</b>\n"
+        f"• ✅ Approved (Paid): <b>{info['approved']}</b>\n"
+        f"• ⏳ Pending Upgrade: <b>{info['pending']}</b>\n"
+        f"• 📈 Conversion Rate: <b>{info['success_rate']:.0f}%</b>\n"
+        f"• 💰 Total Earned: <b>{info['earned_etb']} ETB</b>"
+        f"{invited_section}\n"
         f"📢 <b>Channel:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>"
     )
     await safe_edit_message(callback, text, reply_markup=build_referral_kb(info["code"], info["link"]))
-
 
 @router.callback_query(F.data == "ref:copy_code")
 async def cb_ref_copy_code(callback: CallbackQuery):

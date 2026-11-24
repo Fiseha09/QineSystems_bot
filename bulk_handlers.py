@@ -1,3 +1,4 @@
+import html
 import io
 import json
 from aiogram import Router, F
@@ -23,8 +24,14 @@ from resource_catalog import (
 
 bulk_router = Router()
 
+YEAR_SHORT_TAG: dict[str, str] = {
+    "1st Year": "1st Yr",
+    "2nd Year": "2nd Yr",
+    "3rd Year": "3rd Yr",
+}
+
 MORE_RES_TYPES = [
-    ("🎓 COC Past Exams", "res_coc"),
+    ("🎓 COC Past Exams (1st Yr)", "res_coc"),
     ("📝 Worksheets", "res_worksheet"),
     ("📚 አጤሬራ", "res_atirera"),
     ("📖 Reference Books", "res_refbook"),
@@ -35,6 +42,37 @@ COC_TRACK_CHOICES = [
     ("⚖️ Law", "Law"),
     ("🏛 Architecture", "Architecture"),
 ]
+
+
+def _course_btn_label(course: Course, max_name_len: int = 18) -> str:
+    yr = (getattr(course, "year_level", None) or "1st Year").strip()
+    tag = YEAR_SHORT_TAG.get(yr, yr)
+    name = (course.name or "Course").strip()[:max_name_len]
+    return f"[{tag}] {name}"
+
+
+def _build_course_grid(
+    courses: list[Course],
+    callback_prefix: str,
+    back_cb: str = "adm:bulk_hub",
+    max_name_len: int = 18,
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for c in courses:
+        row.append(
+            InlineKeyboardButton(
+                text=_course_btn_label(c, max_name_len=max_name_len),
+                callback_data=f"{callback_prefix}:{c.id}",
+            )
+        )
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data=back_cb)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 class BulkAdminFSM(StatesGroup):
@@ -94,8 +132,8 @@ async def cb_bulk_hub(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer()
     await callback.message.edit_text(
-        "🚀 <b>QineSystems Bulk Import & Batch Upload Engine</b>\n\n"
-        "Populate courses, chapters, quiz banks, flashcards, and PDF modules instantly:",
+        "🚀 <b>QineSystems Bulk Import &amp; Batch Upload Engine</b>\n\n"
+        "Populate courses, chapters, quiz banks, flashcards, and PDF modules across <b>1st / 2nd / 3rd Year</b>:",
         reply_markup=bulk_menu_kb(),
         parse_mode="HTML",
     )
@@ -132,23 +170,12 @@ async def cb_bulk_chapters_start(callback: CallbackQuery, state: FSMContext):
         return
     await callback.answer()
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-
-    rows = []
-    row = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"blk_ch_crs:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="adm:bulk_hub")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
 
     await state.set_state(BulkAdminFSM.ch_course)
     await callback.message.edit_text(
         "📖 <b>Bulk Add Chapters</b> → Select a Course:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, "blk_ch_crs", "adm:bulk_hub"),
         parse_mode="HTML",
     )
 
@@ -178,13 +205,17 @@ async def cb_bulk_chapters_course(callback: CallbackQuery, state: FSMContext):
 async def msg_bulk_chapters_save(message: Message, state: FSMContext):
     raw_text = await extract_text_from_msg(message)
     data = await state.get_data()
-    course_id = data["course_id"]
+    course_id = data.get("course_id")
+    if not course_id:
+        await state.clear()
+        await message.answer("⚠️ Session expired. Start Bulk Add Chapters again.", reply_markup=bulk_menu_kb(), parse_mode="HTML")
+        return
 
     added = 0
     skipped = 0
     async with AsyncSessionLocal() as db:
         existing_nums = set((await db.execute(
-            select(Chapter.chapter_number).where(Chapter.course_id == course_id)
+            select(Chapter.chapter_number).where(Chapter.course_id == int(course_id))
         )).scalars().all())
 
         for line in raw_text.splitlines():
@@ -197,7 +228,7 @@ async def msg_bulk_chapters_save(message: Message, state: FSMContext):
                 skipped += 1
                 continue
             auto_title = f"Chapter {ch_num}"
-            db.add(Chapter(course_id=course_id, chapter_number=ch_num, title=auto_title, is_published=True))
+            db.add(Chapter(course_id=int(course_id), chapter_number=ch_num, title=auto_title, is_published=True))
             existing_nums.add(ch_num)
             added += 1
         await db.commit()
@@ -219,21 +250,12 @@ async def cb_bulk_fc_start(callback: CallbackQuery, state: FSMContext):
         return
     await callback.answer()
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-    rows = []
-    row = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"blk_fc_crs:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="adm:bulk_hub")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
+
     await state.set_state(BulkAdminFSM.fc_course)
     await callback.message.edit_text(
         "🃏 <b>Bulk Add Flashcards</b> → Select Course:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, "blk_fc_crs", "adm:bulk_hub"),
         parse_mode="HTML",
     )
 
@@ -272,13 +294,18 @@ async def cb_bulk_fc_chapter(callback: CallbackQuery, state: FSMContext):
 async def msg_bulk_fc_save(message: Message, state: FSMContext):
     raw_text = await extract_text_from_msg(message)
     data = await state.get_data()
-    chapter_id = data["chapter_id"]
+    chapter_id = data.get("chapter_id")
+    if not chapter_id:
+        await state.clear()
+        await message.answer("⚠️ Session expired. Start Bulk Add Flashcards again.", reply_markup=bulk_menu_kb(), parse_mode="HTML")
+        return
+
     cards = []
     for line in raw_text.splitlines():
         if "|" in line:
             f, b = [x.strip() for x in line.split("|", 1)]
             if f and b:
-                cards.append(Flashcard(chapter_id=chapter_id, front_text=f, back_text=b, is_published=True))
+                cards.append(Flashcard(chapter_id=int(chapter_id), front_text=f, back_text=b, is_published=True))
     async with AsyncSessionLocal() as db:
         db.add_all(cards)
         await db.commit()
@@ -293,21 +320,12 @@ async def cb_bulk_qz_start(callback: CallbackQuery, state: FSMContext):
         return
     await callback.answer()
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-    rows = []
-    row = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"blk_qz_crs:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="adm:bulk_hub")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
+
     await state.set_state(BulkAdminFSM.qz_course)
     await callback.message.edit_text(
         "⏱ <b>Bulk Import Quizzes</b> → Select Course:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, "blk_qz_crs", "adm:bulk_hub"),
         parse_mode="HTML",
     )
 
@@ -336,7 +354,7 @@ async def cb_bulk_qz_chapter(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BulkAdminFSM.qz_payload)
     await callback.answer()
     await callback.message.edit_text(
-        "⏱ Send your Quiz Bank JSON or CSV file:",
+        "⏱ Send your Quiz Bank JSON file or paste JSON text:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Cancel", callback_data="adm:bulk_hub")]]),
         parse_mode="HTML",
     )
@@ -346,14 +364,19 @@ async def cb_bulk_qz_chapter(callback: CallbackQuery, state: FSMContext):
 async def msg_bulk_qz_save(message: Message, state: FSMContext):
     raw_text = await extract_text_from_msg(message)
     data = await state.get_data()
-    chapter_id = data["chapter_id"]
+    chapter_id = data.get("chapter_id")
+    if not chapter_id:
+        await state.clear()
+        await message.answer("⚠️ Session expired. Start Bulk Import Quizzes again.", reply_markup=bulk_menu_kb(), parse_mode="HTML")
+        return
+
     questions = []
     try:
         items = json.loads(raw_text)
         for q in items:
             questions.append(QuizQuestion(
-                chapter_id=chapter_id,
-                level=q.get("level", "Level 1"),
+                chapter_id=int(chapter_id),
+                level=q.get("level", "Medium"),
                 question_text=q["question_text"],
                 options=q["options"],
                 correct_option=int(q["correct_option"]),
@@ -367,7 +390,7 @@ async def msg_bulk_qz_save(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(f"✅ <b>{len(questions)} Questions Imported!</b>", reply_markup=bulk_menu_kb(), parse_mode="HTML")
     except Exception as e:
-        await message.answer(f"❌ Error: {e}")
+        await message.answer(f"❌ Error: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
 
 # --- 4. BATCH PDF UPLOADER ---
@@ -395,21 +418,12 @@ async def cb_batch_pdf_start(callback: CallbackQuery, state: FSMContext):
 async def cb_batch_pdf_feature(callback: CallbackQuery, state: FSMContext):
     await state.update_data(feature_key=callback.data.split(":")[1])
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-    rows = []
-    row = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"blk_pdf_crs:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Cancel", callback_data="adm:bulk_hub")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
+
     await state.set_state(BulkAdminFSM.pdf_course)
     await callback.message.edit_text(
         "📘 Select Course:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, "blk_pdf_crs", "adm:bulk_hub"),
         parse_mode="HTML",
     )
 
@@ -455,7 +469,7 @@ async def _get_or_create_helper_chapter(db, course_id: int | None, label: str) -
         await db.execute(select(Course).where(Course.name == "More Resources"))
     ).scalar_one_or_none()
     if not hub_course:
-        hub_course = Course(name="More Resources")
+        hub_course = Course(name="More Resources", year_level="1st Year")
         db.add(hub_course)
         await db.flush()
 
@@ -486,7 +500,8 @@ async def cb_bulk_more_res_start(callback: CallbackQuery, state: FSMContext):
     buttons = [[InlineKeyboardButton(text=lbl, callback_data=f"blk_mr_cat:{k}")] for lbl, k in MORE_RES_TYPES]
     buttons.append([InlineKeyboardButton(text="⬅️ Back", callback_data="adm:bulk_hub")])
     await callback.message.edit_text(
-        "📂 <b>Batch Upload More Resources</b> → Choose Category:",
+        "📂 <b>Batch Upload More Resources</b> → Choose Category:\n"
+        "<i>Note: COC Past Exams apply to 1st Year only.</i>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="HTML",
     )
@@ -502,29 +517,18 @@ async def cb_bulk_more_res_cat(callback: CallbackQuery, state: FSMContext):
         buttons = [[InlineKeyboardButton(text=lbl, callback_data=f"blk_mr_trk:{val}")] for lbl, val in COC_TRACK_CHOICES]
         buttons.append([InlineKeyboardButton(text="⬅️ Back", callback_data="bulk:more_res")])
         await callback.message.edit_text(
-            "🎓 <b>COC Past Exams</b> → Select Track:",
+            "🎓 <b>COC Past Exams (1st Year Only)</b> → Select Track:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode="HTML",
         )
         return
 
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-
-    rows: list[list[InlineKeyboardButton]] = []
-    row: list[InlineKeyboardButton] = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name[:24]}", callback_data=f"blk_mr_crs:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Back", callback_data="bulk:more_res")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
 
     await callback.message.edit_text(
         "📘 <b>Select Course</b>:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, "blk_mr_crs", "bulk:more_res"),
         parse_mode="HTML",
     )
 
@@ -546,7 +550,7 @@ async def cb_bulk_more_res_coc_trk(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BulkAdminFSM.pdf_batch_listening)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Finish Batch Upload", callback_data="adm:bulk_hub")]])
     await callback.message.edit_text(
-        f"🟢 <b>Batch Upload Active (COC · {track_val})</b>\n"
+        f"🟢 <b>Batch Upload Active (1st Year COC · {html.escape(track_val)})</b>\n"
         "Drop multiple PDFs/files now — titles come automatically from each filename.",
         reply_markup=kb,
         parse_mode="HTML",
@@ -583,7 +587,7 @@ async def cb_bulk_more_res_course(callback: CallbackQuery, state: FSMContext):
         )
         return
 
-    sub_label = f"Chapter {chapters[0].chapter_number}" if (mr_cat == "res_atirera") else ""
+    sub_label = f"Chapter {chapters[0].chapter_number}" if (mr_cat == "res_atirera" and chapters) else ""
     await state.update_data(
         course_id=course_id,
         chapter_id=chap_id,
@@ -613,7 +617,7 @@ async def cb_bulk_more_res_atirera_chapter(callback: CallbackQuery, state: FSMCo
     await state.set_state(BulkAdminFSM.pdf_batch_listening)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="✅ Finish Batch Upload", callback_data="adm:bulk_hub")]])
     await callback.message.edit_text(
-        f"🟢 <b>Batch Upload Active (አጤሬራ · Chapter {ch_num_s})</b>\n"
+        f"🟢 <b>Batch Upload Active (አጤሬራ · Chapter {html.escape(ch_num_s)})</b>\n"
         "Drop multiple PDFs/files now — titles come automatically from each filename.",
         reply_markup=kb,
         parse_mode="HTML",
@@ -623,7 +627,8 @@ async def cb_bulk_more_res_atirera_chapter(callback: CallbackQuery, state: FSMCo
 @bulk_router.message(BulkAdminFSM.pdf_batch_listening, F.document)
 async def msg_batch_pdf_receive(message: Message, state: FSMContext):
     data = await state.get_data()
-    title = (message.caption or message.document.file_name or "Resource").rsplit(".", 1)[0].replace("_", " ").strip()
+    doc_name = message.document.file_name if message.document else "Resource"
+    title = (message.caption or doc_name or "Resource").rsplit(".", 1)[0].replace("_", " ").strip()
     mr_cat = data.get("mr_cat") or ""
     mr_sub = data.get("mr_sub") or ""
 
@@ -640,8 +645,8 @@ async def msg_batch_pdf_receive(message: Message, state: FSMContext):
         async with AsyncSessionLocal() as db:
             db.add(
                 LearningResource(
-                    chapter_id=data["chapter_id"],
-                    feature_key=data["feature_key"],
+                    chapter_id=int(data["chapter_id"]),
+                    feature_key=str(data["feature_key"]),
                     title=title,
                     content_type="telegram_file",
                     telegram_file_id=message.document.file_id,
@@ -650,9 +655,10 @@ async def msg_batch_pdf_receive(message: Message, state: FSMContext):
             )
             await db.commit()
 
-    count = data.get("uploaded_count", 0) + 1
+    count = int(data.get("uploaded_count", 0)) + 1
     await state.update_data(uploaded_count=count)
-    await message.reply(f"✅ Indexed #{count}: <b>{title}</b>", parse_mode="HTML")
+    await message.reply(f"✅ Indexed #{count}: <b>{html.escape(title)}</b>", parse_mode="HTML")
+
 
 # --- 6. NESTED MANAGE CATALOG ITEMS (CRUD) ---
 @bulk_router.callback_query(F.data == "bulk:crud")
@@ -664,7 +670,7 @@ async def cb_bulk_crud_categories(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     rows = [
         [
-            InlineKeyboardButton(text="🎓 COC Past Exams", callback_data="blk_mc_cat:coc"),
+            InlineKeyboardButton(text="🎓 COC Past Exams (1st Yr)", callback_data="blk_mc_cat:coc"),
             InlineKeyboardButton(text="📝 Worksheets", callback_data="blk_mc_cat:worksheet"),
         ],
         [
@@ -696,29 +702,18 @@ async def cb_bulk_crud_pick_sub_or_course(callback: CallbackQuery, state: FSMCon
         ]
         rows.append([InlineKeyboardButton(text="⬅️ Back to Categories", callback_data="bulk:crud")])
         await callback.message.edit_text(
-            "🗂 <b>COC Past Exams</b> → Choose Track:",
+            "🗂 <b>COC Past Exams (1st Year Only)</b> → Choose Track:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             parse_mode="HTML",
         )
         return
 
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
-
-    rows = []
-    row = []
-    for c in courses:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name[:22]}", callback_data=f"blk_mc_crs:{cat}:{c.id}"))
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅️ Back to Categories", callback_data="bulk:crud")])
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
 
     await callback.message.edit_text(
         "🗂 <b>Select Course</b>:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        reply_markup=_build_course_grid(courses, f"blk_mc_crs:{cat}", "bulk:crud"),
         parse_mode="HTML",
     )
 
@@ -770,8 +765,9 @@ async def _show_crud_files_view(
     if chapter_label:
         scope_parts.append(chapter_label)
 
+    safe_scope = html.escape(" · ".join(scope_parts))
     text = (
-        f"🗂 <b>Manage Files ({' · '.join(scope_parts)})</b>\n"
+        f"🗂 <b>Manage Files ({safe_scope})</b>\n"
         + ("Tap a file to toggle access, rename, or delete:" if filtered else "<i>No files found in this selection.</i>")
     )
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
@@ -820,13 +816,12 @@ async def cb_bulk_crud_course(callback: CallbackQuery, state: FSMContext):
                     chapters.append(ch_val)
 
         if chapters:
-            await state.update_data(mc_cat=cat, mc_course_id=cid)
+            await state.update_data(mc_cat=cat, mc_course_id=cid, mc_atirera_chapters=chapters)
             rows = [
                 [InlineKeyboardButton(text=f"📑 {ch[:30]}", callback_data=f"blk_mc_chp:{cid}:{idx}")]
                 for idx, ch in enumerate(chapters[:20])
             ]
             rows.append([InlineKeyboardButton(text="⬅️ Back to Courses", callback_data="blk_mc_cat:atirera")])
-            await state.update_data(mc_atirera_chapters=chapters)
             await callback.message.edit_text(
                 "🗂 <b>አጤሬራ</b> → Select Chapter:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
@@ -901,9 +896,9 @@ async def cb_bulk_crud_item(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="⬅️ Back to Files", callback_data=return_cb)],
     ])
     await callback.message.edit_text(
-        f"📄 <b>{it['title']}</b>\n"
-        f"• Category: <code>{cat}</code>\n"
-        f"• Track/Ch: <code>{sub or '—'}</code>\n"
+        f"📄 <b>{html.escape(str(it['title']))}</b>\n"
+        f"• Category: <code>{html.escape(str(cat))}</code>\n"
+        f"• Track/Ch: <code>{html.escape(str(sub or '—'))}</code>\n"
         f"• Access: <code>{'Free' if it['is_free'] else 'Premium'}</code>",
         reply_markup=kb,
         parse_mode="HTML",
@@ -941,7 +936,7 @@ async def msg_bulk_crud_rename_save(message: Message, state: FSMContext):
     data = await state.get_data()
     res_id = int(data.get("crud_rename_id") or 0)
     await rename_catalog_item(res_id, message.text or "")
-    await state.set_state(None)
+    await state.clear()
     await message.answer("✅ Title updated.", reply_markup=bulk_menu_kb(), parse_mode="HTML")
 
 

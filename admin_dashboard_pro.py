@@ -14,6 +14,7 @@ from database import AsyncSessionLocal
 from models import (
     Chapter,
     Course,
+    DailyChallengeCompletion,
     FeatureConfig,
     Flashcard,
     LearningResource,
@@ -31,6 +32,8 @@ PLAN_DURATIONS_DAYS: dict[str, int] = {
     "QINE_PLUS": 30,
     "QINE_PRO": 90,
 }
+
+REFERRAL_REWARD_ETB = 30
 
 YEAR_OPTIONS: list[tuple[str, str]] = [
     ("1st Year", "🎓 1st Year"),
@@ -65,48 +68,48 @@ class ProAdminFSM(StatesGroup):
 
 def pro_admin_home_kb(pending_count: int, open_tickets: int = 0) -> InlineKeyboardMarkup:
     approval_text = (
-        f"✅ Approve {pending_count} waiting users"
+        f"✅ Approve {pending_count} Waiting Receipt(s)"
         if pending_count > 0
-        else "✅ Approve 0 waiting users"
+        else "✅ Approve 0 Waiting Receipts"
     )
     ticket_btn_text = (
-        f"🎫 Tickets ({open_tickets} open)"
+        f"🎫 Tickets ({open_tickets} Open)"
         if open_tickets > 0
-        else "🎫 Tickets"
+        else "🎫 Support Tickets"
     )
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=approval_text, callback_data="pro:queue")],
         [
-            InlineKeyboardButton(text="👥 Users", callback_data="pro:users"),
-            InlineKeyboardButton(text="💰 Payments", callback_data="pro:payments"),
-        ],
-        [
-            InlineKeyboardButton(text="🎁 Referrals", callback_data="pro:referrals"),
-            InlineKeyboardButton(text="❓ Questions", callback_data="pro:questions"),
-        ],
-        [
-            InlineKeyboardButton(text="📚 Subjects", callback_data="pro:subjects"),
-            InlineKeyboardButton(text="📦 Categories", callback_data="pro:categories"),
-        ],
-        [
-            InlineKeyboardButton(text="📊 Dashboard", callback_data="pro:dashboard"),
-            InlineKeyboardButton(text="📈 Analytics", callback_data="pro:analytics"),
-        ],
-        [
-            InlineKeyboardButton(text="🩺 Content Health", callback_data="pro:health"),
+            InlineKeyboardButton(text="💰 Payments Hub", callback_data="pro:payments"),
             InlineKeyboardButton(text=ticket_btn_text, callback_data="pro:tickets"),
         ],
         [
-            InlineKeyboardButton(text="📋 CSV Validator", callback_data="pro:csv_validate"),
-            InlineKeyboardButton(text="📢 Broadcast", callback_data="pro:broadcast"),
+            InlineKeyboardButton(text="📚 Subjects & Years", callback_data="pro:subjects"),
+            InlineKeyboardButton(text="❓ Question Bank", callback_data="pro:questions"),
+        ],
+        [
+            InlineKeyboardButton(text="📦 Feature Tiers", callback_data="pro:categories"),
+            InlineKeyboardButton(text="🩺 Content Health", callback_data="pro:health"),
+        ],
+        [
+            InlineKeyboardButton(text="👥 Students", callback_data="pro:users"),
+            InlineKeyboardButton(text="🎁 Referrals & Rewards", callback_data="pro:referrals"),
+        ],
+        [
+            InlineKeyboardButton(text="📊 Dashboard", callback_data="pro:dashboard"),
+            InlineKeyboardButton(text="📈 Analytics & Activity", callback_data="pro:analytics"),
         ],
         [
             InlineKeyboardButton(text="🚀 Bulk Import", callback_data="adm:bulk_hub"),
             InlineKeyboardButton(text="🛠 Full CRUD", callback_data="adm:crud_hub"),
         ],
         [
+            InlineKeyboardButton(text="📋 CSV Validator", callback_data="pro:csv_validate"),
+            InlineKeyboardButton(text="📢 Broadcast", callback_data="pro:broadcast"),
+        ],
+        [
             InlineKeyboardButton(text="🔄 Refresh", callback_data="adm:home_pro"),
-            InlineKeyboardButton(text="⬅️ Back to Menu", callback_data="nav:main"),
+            InlineKeyboardButton(text="🏠 Student Menu", callback_data="nav:main"),
         ],
     ])
 
@@ -114,18 +117,18 @@ def pro_admin_home_kb(pending_count: int, open_tickets: int = 0) -> InlineKeyboa
 def payment_hub_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⏳ Pending Payments", callback_data="pay:pending:0"),
-            InlineKeyboardButton(text="📋 View All Payments", callback_data="pay:all:0"),
+            InlineKeyboardButton(text="⏳ Pending Receipts", callback_data="pay:pending:0"),
+            InlineKeyboardButton(text="📋 All Receipts", callback_data="pay:all:0"),
         ],
         [
             InlineKeyboardButton(text="💳 Payment Accounts", callback_data="pay:methods"),
-            InlineKeyboardButton(text="📈 Revenue Stats", callback_data="pay:stats"),
+            InlineKeyboardButton(text="📈 Ledger Stats", callback_data="pay:stats"),
         ],
         [
-            InlineKeyboardButton(text="✅ Approve All", callback_data="pay:approve_all_confirm"),
+            InlineKeyboardButton(text="✅ Approve All Pending", callback_data="pay:approve_all_confirm"),
         ],
         [
-            InlineKeyboardButton(text="⬅️ Back to Admin", callback_data="adm:home_pro"),
+            InlineKeyboardButton(text="⬅️ Back to Control Center", callback_data="adm:home_pro"),
         ],
     ])
 
@@ -185,6 +188,12 @@ async def cb_pro_admin_home(callback: CallbackQuery, state: FSMContext):
             total_questions = (await db.execute(select(func.count(QuizQuestion.id)))).scalar() or 0
             total_subjects = (await db.execute(select(func.count(Course.id)))).scalar() or 0
             total_categories = (await db.execute(select(func.count(FeatureConfig.key)))).scalar() or 12
+            courses = (await db.execute(select(Course))).scalars().all()
+
+        yr_counts: dict[str, int] = {}
+        for c in courses:
+            yr = getattr(c, "year_level", None) or "1st Year"
+            yr_counts[yr] = yr_counts.get(yr, 0) + 1
 
         now_utc = datetime.utcnow().strftime("%d %b %Y %H:%M UTC")
         queue_line = (
@@ -199,7 +208,8 @@ async def cb_pro_admin_home(callback: CallbackQuery, state: FSMContext):
             f"<i>Live DB snapshot · {now_utc}</i>\n\n"
             f"{queue_line}{ticket_line}"
             f"Users     <code>{total_users} total · {paid_users} paid</code>\n"
-            f"Content   <code>{total_questions} questions · {total_subjects} subjects · {total_categories} categories</code>\n"
+            f"Content   <code>{total_questions} questions · {total_subjects} subjects · {total_categories} features</code>\n"
+            f"Years     <code>1st: {yr_counts.get('1st Year', 0)} · 2nd: {yr_counts.get('2nd Year', 0)} · 3rd: {yr_counts.get('3rd Year', 0)}</code>\n"
             f"Admin     <code>{safe_admin} ({callback.from_user.id})</code>"
         )
         await safe_edit_or_send(callback, text, pro_admin_home_kb(pending_count, open_tickets))
@@ -296,17 +306,57 @@ async def cb_pro_referrals(callback: CallbackQuery):
     await callback.answer()
     try:
         async with AsyncSessionLocal() as db:
-            total_users = (await db.execute(select(func.count(Student.telegram_id)))).scalar() or 0
-            total_refs = (await db.execute(
-                select(func.count(Student.telegram_id)).where(Student.referred_by_id.isnot(None))
-            )).scalar() or 0
-        ref_pct = (total_refs / total_users * 100.0) if total_users > 0 else 0.0
+            all_students = (await db.execute(select(Student))).scalars().all()
+
+        student_map = {s.telegram_id: s for s in all_students}
+        invited_by_ref: dict[int, int] = {}
+        approved_by_ref: dict[int, int] = {}
+
+        for st in all_students:
+            if st.referred_by_id:
+                rid = st.referred_by_id
+                invited_by_ref[rid] = invited_by_ref.get(rid, 0) + 1
+                if st.plan_code in ("QINE_PLUS", "QINE_PRO") and (
+                    not st.subscription_expires_at or st.subscription_expires_at > datetime.utcnow()
+                ):
+                    approved_by_ref[rid] = approved_by_ref.get(rid, 0) + 1
+
+        total_users = len(all_students)
+        total_invited = sum(invited_by_ref.values())
+        total_approved = sum(approved_by_ref.values())
+        total_rewards_etb = total_approved * REFERRAL_REWARD_ETB
+
+        ranked = sorted(
+            invited_by_ref.items(),
+            key=lambda item: (approved_by_ref.get(item[0], 0), item[1]),
+            reverse=True,
+        )
+
+        lines = [
+            "🎁 <b>Referral Program &amp; Rewards Overview</b>\n",
+            f"• Total Registered Users: <b>{total_users}</b>",
+            f"• Total Invited via Link: <b>{total_invited}</b>",
+            f"• Active / Rewarded Referrals: <b>{total_approved}</b>",
+            f"• Reward Ledger ({REFERRAL_REWARD_ETB} ETB/active): <b>{total_rewards_etb} ETB</b>",
+            "",
+            "<b>🏆 Top Inviters</b>",
+        ]
+
+        if not ranked:
+            lines.append("<i>No referrals recorded yet.</i>")
+        else:
+            for rid, inv_cnt in ranked[:10]:
+                app_cnt = approved_by_ref.get(rid, 0)
+                owner = student_map.get(rid)
+                owner_name = html.escape((owner.full_name if owner and owner.full_name else f"ID {rid}")[:24])
+                lines.append(
+                    f"• <b>{owner_name}</b> (<code>{rid}</code>): "
+                    f"<b>{inv_cnt}</b> invited · <b>{app_cnt}</b> active (<b>{app_cnt * REFERRAL_REWARD_ETB} ETB</b>)"
+                )
+
         await safe_edit_or_send(
             callback,
-            f"🎁 <b>Referral Program Stats</b>\n\n"
-            f"• Total Referred Students: <b>{total_refs}</b>\n"
-            f"• Total Registered Users: <b>{total_users}</b>\n"
-            f"• Referral Share: <b>{ref_pct:.1f}%</b>",
+            "\n".join(lines),
             back_pro_kb(extra_rows=[[InlineKeyboardButton(text="👥 View Users", callback_data="pro:users")]]),
         )
     except Exception as exc:
@@ -363,7 +413,9 @@ async def cb_pro_subjects(callback: CallbackQuery, state: FSMContext):
     ])
     await safe_edit_or_send(
         callback,
-        f"📚 <b>Subjects &amp; Content Management</b>\n<i>{summary_line}</i>",
+        f"📚 <b>Subjects &amp; Year Management</b>\n"
+        f"<i>{summary_line}</i>\n"
+        f"<i>Note: COC Past Exams apply to 1st Year only.</i>",
         kb,
     )
 
@@ -1130,7 +1182,7 @@ async def cb_pro_dashboard(callback: CallbackQuery):
             u_free = (await db.execute(select(func.count(Student.telegram_id)).where(Student.plan_code == "FREE"))).scalar() or 0
             u_paid = max(0, u_total - u_free)
 
-            crs_cnt = (await db.execute(select(func.count(Course.id)))).scalar() or 0
+            courses = (await db.execute(select(Course))).scalars().all()
             chp_cnt = (await db.execute(select(func.count(Chapter.id)))).scalar() or 0
             res_cnt = (await db.execute(select(func.count(LearningResource.id)))).scalar() or 0
             qz_cnt = (await db.execute(select(func.count(QuizQuestion.id)))).scalar() or 0
@@ -1139,14 +1191,20 @@ async def cb_pro_dashboard(callback: CallbackQuery):
             pend_pay = (await db.execute(select(func.count(PaymentReceipt.id)).where(PaymentReceipt.status == "PENDING"))).scalar() or 0
             open_tkt = (await db.execute(select(func.count(SupportTicket.id)).where(SupportTicket.status == "OPEN"))).scalar() or 0
 
+        yr_counts: dict[str, int] = {}
+        for c in courses:
+            yr = getattr(c, "year_level", None) or "1st Year"
+            yr_counts[yr] = yr_counts.get(yr, 0) + 1
+
         text = (
             "📊 <b>Operational Dashboard</b>\n\n"
             "<b>👥 Students</b>\n"
             f"• Total Registered: <b>{u_total}</b>\n"
             f"• Free Plan: <b>{u_free}</b> · Paid Plan: <b>{u_paid}</b>\n\n"
             "<b>📚 Study Catalogue</b>\n"
-            f"• Courses: <b>{crs_cnt}</b> · Chapters: <b>{chp_cnt}</b>\n"
-            f"• Resources/PDFs: <b>{res_cnt}</b> · Quiz Questions: <b>{qz_cnt}</b> · Flashcards: <b>{fc_cnt}</b>\n\n"
+            f"• Courses: <b>{len(courses)}</b> (1st: <b>{yr_counts.get('1st Year', 0)}</b> · 2nd: <b>{yr_counts.get('2nd Year', 0)}</b> · 3rd: <b>{yr_counts.get('3rd Year', 0)}</b>)\n"
+            f"• Chapters: <b>{chp_cnt}</b> · Resources/PDFs: <b>{res_cnt}</b>\n"
+            f"• Quiz Questions: <b>{qz_cnt}</b> · Flashcards: <b>{fc_cnt}</b>\n\n"
             "<b>🔔 Action Queue</b>\n"
             f"• Pending Payment Receipts: <b>{pend_pay}</b>\n"
             f"• Open Support Tickets: <b>{open_tkt}</b>"
@@ -1176,6 +1234,7 @@ async def cb_pro_analytics(callback: CallbackQuery):
             pro_u = (await db.execute(select(func.count(Student.telegram_id)).where(Student.plan_code == "QINE_PRO"))).scalar() or 0
             ref_u = (await db.execute(select(func.count(Student.telegram_id)).where(Student.referred_by_id.isnot(None)))).scalar() or 0
             attempts = (await db.execute(select(QuizAttempt))).scalars().all()
+            dc_completions = (await db.execute(select(func.count(DailyChallengeCompletion.id)))).scalar() or 0
 
         total_u = free_u + plus_u + pro_u
         paid_u = plus_u + pro_u
@@ -1189,12 +1248,13 @@ async def cb_pro_analytics(callback: CallbackQuery):
             quiz_line = "• Recorded Quiz Attempts: <b>0</b> · Avg Accuracy: <b>N/A (no attempts yet)</b>"
 
         text = (
-            "📈 <b>Analytics (Honest Recorded Data)</b>\n\n"
+            "📈 <b>Analytics &amp; Study Activity</b>\n\n"
             "<b>💎 Plan Distribution</b>\n"
             f"• Free: <b>{free_u}</b> · Plus: <b>{plus_u}</b> · Pro: <b>{pro_u}</b>\n"
             f"• Paid Share: <b>{conv_pct:.1f}%</b> ({paid_u}/{total_u})\n\n"
             "<b>🌱 Growth &amp; Learning</b>\n"
             f"• Referred Users: <b>{ref_u}</b>\n"
+            f"• Daily Challenge Completions: <b>{dc_completions}</b>\n"
             f"{quiz_line}"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[

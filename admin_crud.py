@@ -23,7 +23,15 @@ from admin_handlers import is_admin
 admin_crud_router = Router()
 
 PAGE_SIZE = 8
+REFERRAL_REWARD_ETB = 30
 _TAG_RE = re.compile(r"^\[([a-zA-Z_]+)(?::([^\]]+))?\]\s*(.*)$", re.DOTALL)
+
+YEAR_CYCLE_ORDER: list[str] = ["1st Year", "2nd Year", "3rd Year"]
+YEAR_SHORT_TAG: dict[str, str] = {
+    "1st Year": "1st Yr",
+    "2nd Year": "2nd Yr",
+    "3rd Year": "3rd Yr",
+}
 
 BASE_RESOURCE_TYPES: list[tuple[str, str]] = [
     ("notes", "📝 Study Notes"),
@@ -34,6 +42,15 @@ BASE_RESOURCE_TYPES: list[tuple[str, str]] = [
     ("practice_questions", "✍️ Practice Questions"),
     ("more_resources", "📂 Study Resources"),
 ]
+
+
+def _course_year_label(course: Course) -> str:
+    return (getattr(course, "year_level", None) or "1st Year").strip()
+
+
+def _course_year_short(course: Course) -> str:
+    yr = _course_year_label(course)
+    return YEAR_SHORT_TAG.get(yr, yr)
 
 
 def _format_resource_badge(res: LearningResource) -> str:
@@ -102,7 +119,7 @@ async def _safe_edit(callback: CallbackQuery, text: str, reply_markup: InlineKey
 def crud_hub_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📚 Manage Courses", callback_data="crud:courses:0"),
+            InlineKeyboardButton(text="📚 Manage Courses & Years", callback_data="crud:courses:0"),
             InlineKeyboardButton(text="📖 Manage Chapters", callback_data="crud:chapters:0"),
         ],
         [
@@ -147,7 +164,7 @@ async def cb_crud_hub(callback: CallbackQuery, state: FSMContext):
 
 
 # =====================================================================
-# 1. COURSES CRUD
+# 1. COURSES CRUD (WITH YEAR LEVEL)
 # =====================================================================
 @admin_crud_router.callback_query(F.data == "crud:courses")
 @admin_crud_router.callback_query(F.data.startswith("crud:courses:"))
@@ -160,7 +177,7 @@ async def cb_crud_courses(callback: CallbackQuery):
     page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
 
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
 
     page_items, cur_page, total_pages = _paginate(courses, page)
     await callback.answer()
@@ -168,10 +185,12 @@ async def cb_crud_courses(callback: CallbackQuery):
     buttons: list[list[InlineKeyboardButton]] = []
     for c in page_items:
         status = "🟢" if c.is_active else "🔴"
+        yr_tag = _course_year_short(c)
         buttons.append([
-            InlineKeyboardButton(text=f"{status} {c.name}", callback_data="no_op"),
-            InlineKeyboardButton(text="🔄 Toggle", callback_data=f"crud_c_tog:{c.id}:{cur_page}"),
-            InlineKeyboardButton(text="🗑 Delete", callback_data=f"crud_c_del:{c.id}:{cur_page}"),
+            InlineKeyboardButton(text=f"{status} [{yr_tag}] {c.name[:18]}", callback_data="no_op"),
+            InlineKeyboardButton(text="📅 Year", callback_data=f"crud_c_yr:{c.id}:{cur_page}"),
+            InlineKeyboardButton(text="🔄", callback_data=f"crud_c_tog:{c.id}:{cur_page}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"crud_c_del:{c.id}:{cur_page}"),
         ])
 
     nav = _pagination_row("crud:courses", cur_page, total_pages)
@@ -181,10 +200,39 @@ async def cb_crud_courses(callback: CallbackQuery):
 
     await _safe_edit(
         callback,
-        f"📚 <b>Course Catalogue Management</b> (Page {cur_page + 1}/{total_pages})\n"
-        "Toggle visibility or safely delete courses and their child chapters/content:",
+        f"📚 <b>Course Catalogue &amp; Year Management</b> (Page {cur_page + 1}/{total_pages})\n"
+        "Tap <b>📅 Year</b> to cycle <code>1st → 2nd → 3rd Year</code>, <b>🔄</b> to toggle visibility, or <b>🗑</b> to delete:",
         InlineKeyboardMarkup(inline_keyboard=buttons),
     )
+
+
+@admin_crud_router.callback_query(F.data.startswith("crud_c_yr:"))
+async def cb_crud_cycle_course_year(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    parts = callback.data.split(":")
+    c_id = int(parts[1])
+    page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+
+    async with AsyncSessionLocal() as db:
+        c = (await db.execute(select(Course).where(Course.id == c_id))).scalar_one_or_none()
+        if not c:
+            await callback.answer("Course not found.", show_alert=True)
+            return
+        cur_yr = _course_year_label(c)
+        next_yr = (
+            YEAR_CYCLE_ORDER[(YEAR_CYCLE_ORDER.index(cur_yr) + 1) % len(YEAR_CYCLE_ORDER)]
+            if cur_yr in YEAR_CYCLE_ORDER
+            else "1st Year"
+        )
+        c.year_level = next_yr
+        await db.commit()
+        cname = c.name
+
+    await callback.answer(f"{cname} → {next_yr}", show_alert=False)
+    callback.data = f"crud:courses:{page}"
+    await cb_crud_courses(callback)
 
 
 @admin_crud_router.callback_query(F.data.startswith("crud_c_tog:"))
@@ -259,7 +307,7 @@ async def cb_crud_chapters(callback: CallbackQuery):
     page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
 
     async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
 
     page_items, cur_page, total_pages = _paginate(courses, page, page_size=10)
     await callback.answer()
@@ -267,7 +315,12 @@ async def cb_crud_chapters(callback: CallbackQuery):
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for c in page_items:
-        row.append(InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"crud_ch_crs:{c.id}:0"))
+        row.append(
+            InlineKeyboardButton(
+                text=f"[{_course_year_short(c)}] {c.name[:16]}",
+                callback_data=f"crud_ch_crs:{c.id}:0",
+            )
+        )
         if len(row) == 2:
             rows.append(row)
             row = []
@@ -315,6 +368,7 @@ async def cb_crud_chapters_list(callback: CallbackQuery):
             )).scalar() or 0
             ch_summary.append((ch, q_n, r_n))
 
+    yr_badge = html.escape(_course_year_label(course))
     page_items, cur_page, total_pages = _paginate(ch_summary, page, page_size=6)
     await callback.answer()
 
@@ -323,11 +377,17 @@ async def cb_crud_chapters_list(callback: CallbackQuery):
             [InlineKeyboardButton(text="⬅️ Back to Courses", callback_data="crud:chapters:0")],
             [InlineKeyboardButton(text="⬅️ Back to CRUD Hub", callback_data="adm:crud_hub")],
         ])
-        await _safe_edit(callback, f"📖 <b>Chapters for {html.escape(course.name)}</b>\n\nNo chapters found for this course.", kb)
+        await _safe_edit(
+            callback,
+            f"📖 <b>Chapters for {html.escape(course.name)}</b> (<i>{yr_badge}</i>)\n\nNo chapters found for this course.",
+            kb,
+        )
         return
 
     buttons: list[list[InlineKeyboardButton]] = []
-    lines: list[str] = [f"📖 <b>Chapters for {html.escape(course.name)}</b> (Page {cur_page + 1}/{total_pages})\n"]
+    lines: list[str] = [
+        f"📖 <b>Chapters for {html.escape(course.name)}</b> · <i>{yr_badge}</i> (Page {cur_page + 1}/{total_pages})\n"
+    ]
 
     for ch, q_n, r_n in page_items:
         title_part = f" — {html.escape(ch.title)}" if getattr(ch, "title", None) else ""
@@ -523,7 +583,7 @@ async def cb_crud_resources_type_menu(callback: CallbackQuery):
     await _safe_edit(
         callback,
         "📄 <b>Manage Resources / PDFs</b>\n"
-        "Step 1 → Choose a <b>Resource Type</b> (includes Exam Trainer, Practice Questions, Study Resources &amp; more):",
+        "Step 1 → Choose a <b>Resource Type</b> (COC applies to 1st Year only):",
         InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
@@ -541,7 +601,7 @@ async def cb_crud_resource_courses(callback: CallbackQuery):
     async with AsyncSessionLocal() as db:
         resource_types = await _build_resource_types_list(db)
         type_label = dict(resource_types).get(type_key, type_key)
-        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
         type_resources = await _collect_resources_for_type_and_course(db, type_key, course_id=None)
 
         chapters = (await db.execute(select(Chapter))).scalars().all()
@@ -576,9 +636,10 @@ async def cb_crud_resource_courses(callback: CallbackQuery):
     row: list[InlineKeyboardButton] = []
     for c in page_courses:
         c_cnt = count_per_course.get(c.id, 0)
+        yr_tag = _course_year_short(c)
         row.append(
             InlineKeyboardButton(
-                text=f"📚 {c.name} ({c_cnt})",
+                text=f"[{yr_tag}] {c.name[:13]} ({c_cnt})",
                 callback_data=f"crud_rc:{type_key}:{c.id}:0",
             )
         )
@@ -606,9 +667,10 @@ async def cb_crud_resource_courses(callback: CallbackQuery):
     rows.append([InlineKeyboardButton(text="⬅️ Change Resource Type", callback_data="crud:resources")])
     rows.append([InlineKeyboardButton(text="⬅️ Back to CRUD Hub", callback_data="adm:crud_hub")])
 
+    coc_note = "\n<i>⚠️ COC Past Exams apply to 1st Year only.</i>" if type_key == "coc" else ""
     await _safe_edit(
         callback,
-        f"📄 <b>{type_label}</b> → <b>Select Scope / Course</b> (Page {cur_page + 1}/{total_pages})\n"
+        f"📄 <b>{type_label}</b> → <b>Select Scope / Course</b> (Page {cur_page + 1}/{total_pages}){coc_note}\n"
         "View all files in this type directly or pick a course:",
         InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -643,7 +705,7 @@ async def cb_crud_course_resources_list(callback: CallbackQuery):
             ]
         else:
             course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
-            course_name = course.name if course else f"Course #{course_id}"
+            course_name = f"{course.name} ({_course_year_label(course)})" if course else f"Course #{course_id}"
             resources = await _collect_resources_for_type_and_course(
                 db, type_key, course_id=course_id, chapter_to_course=chapter_to_course
             )
@@ -1046,15 +1108,23 @@ async def cb_crud_student_detail(callback: CallbackQuery):
     st_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as db:
         s = (await db.execute(select(Student).where(Student.telegram_id == st_id))).scalar_one_or_none()
-        ref_count = (await db.execute(
-            select(func.count(Student.telegram_id)).where(Student.referred_by_id == st_id)
-        )).scalar() or 0
+        referred = (await db.execute(
+            select(Student).where(Student.referred_by_id == st_id)
+        )).scalars().all()
 
     if not s:
         await callback.answer("Student not found.", show_alert=True)
         return
 
     await callback.answer()
+    invited_cnt = len(referred)
+    active_cnt = sum(
+        1 for r in referred
+        if r.plan_code in ("QINE_PLUS", "QINE_PRO")
+        and (not r.subscription_expires_at or r.subscription_expires_at > datetime.utcnow())
+    )
+    reward_etb = active_cnt * REFERRAL_REWARD_ETB
+
     exp_str = s.subscription_expires_at.strftime("%Y-%m-%d") if s.subscription_expires_at else "N/A"
     uname_str = f"@{s.username}" if getattr(s, "username", None) else "—"
 
@@ -1075,7 +1145,7 @@ async def cb_crud_student_detail(callback: CallbackQuery):
         f"• <b>Telegram ID:</b> <code>{s.telegram_id}</code>\n"
         f"• <b>Plan:</b> <code>{s.plan_code}</code>\n"
         f"• <b>Expires:</b> <code>{exp_str}</code>\n"
-        f"• <b>Referrals:</b> <b>{ref_count}</b>",
+        f"• <b>Referrals:</b> <b>{invited_cnt}</b> invited · <b>{active_cnt}</b> active (<b>{reward_etb} ETB</b>)",
         kb,
     )
 

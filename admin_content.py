@@ -5,16 +5,59 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
+from admin_handlers import is_admin
+import resource_catalog as rc
 from resource_catalog import (
     RESOURCE_CATEGORIES,
     COC_TRACKS,
-    create_resource_entry,
     list_active_courses,
 )
 
 admin_content_router = Router()
 
 COURSES_PER_PAGE = 6
+
+YEAR_SHORT_TAG: dict[str, str] = {
+    "1st Year": "1st Yr",
+    "2nd Year": "2nd Yr",
+    "3rd Year": "3rd Yr",
+}
+
+
+def _course_button_text(course) -> str:
+    yr = (getattr(course, "year_level", None) or "1st Year").strip()
+    tag = YEAR_SHORT_TAG.get(yr, yr)
+    name = (getattr(course, "name", None) or "Course").strip()[:16]
+    return f"[{tag}] {name}"
+
+
+async def _save_resource_item(
+    category: str,
+    title: str,
+    course_id: int = 0,
+    track_or_chapter: str = "",
+    file_id: str | None = None,
+    text_content: str = "",
+    is_free: bool = False,
+):
+    if hasattr(rc, "create_resource_entry"):
+        return await rc.create_resource_entry(
+            category=category,
+            title=title,
+            course_id=course_id,
+            track_or_chapter=track_or_chapter,
+            file_id=file_id,
+            text_content=text_content,
+            is_free=is_free,
+        )
+    return await rc.create_catalog_file_entry(
+        category=category,
+        title=title,
+        telegram_file_id=file_id or "",
+        course_id=course_id or None,
+        sub_label=track_or_chapter,
+        is_free=is_free,
+    )
 
 
 class AdminContentFSM(StatesGroup):
@@ -28,7 +71,7 @@ class AdminContentFSM(StatesGroup):
 
 
 def _is_admin(user_id: int | None) -> bool:
-    return bool(user_id)
+    return bool(user_id and is_admin(user_id))
 
 
 def _nav_row(back_cb: str = "adm:feed_resources") -> list[InlineKeyboardButton]:
@@ -91,10 +134,10 @@ def _course_page_kb(courses: list, page: int, prefix: str, back_cb: str) -> Inli
     rows: list[list[InlineKeyboardButton]] = []
     for i in range(0, len(chunk), 2):
         c1 = chunk[i]
-        row = [InlineKeyboardButton(text=c1.name[:22], callback_data=f"{prefix}:{c1.id}")]
+        row = [InlineKeyboardButton(text=_course_button_text(c1), callback_data=f"{prefix}:{c1.id}")]
         if i + 1 < len(chunk):
             c2 = chunk[i + 1]
-            row.append(InlineKeyboardButton(text=c2.name[:22], callback_data=f"{prefix}:{c2.id}"))
+            row.append(InlineKeyboardButton(text=_course_button_text(c2), callback_data=f"{prefix}:{c2.id}"))
         rows.append(row)
 
     if total_pages > 1:
@@ -159,7 +202,7 @@ async def adm_choose_resource_category(callback: CallbackQuery, state: FSMContex
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🎓 COC", callback_data="adm_res_cat:coc"),
+            InlineKeyboardButton(text="🎓 COC (1st Yr)", callback_data="adm_res_cat:coc"),
             InlineKeyboardButton(text="📝 Worksheet", callback_data="adm_res_cat:worksheet"),
         ],
         [
@@ -175,7 +218,7 @@ async def adm_choose_resource_category(callback: CallbackQuery, state: FSMContex
         callback.bot,
         callback.message.chat.id,
         state,
-        "📥 <b>Bulk Content Feeder</b> — Choose category:",
+        "📥 <b>Bulk Content Feeder</b> — Choose category:\n<i>COC Past Exams apply to 1st Year only.</i>",
         kb,
         prefer_msg=callback.message,
     )
@@ -200,6 +243,9 @@ async def adm_course_page_turn(callback: CallbackQuery, state: FSMContext):
 
 @admin_content_router.callback_query(F.data.startswith("adm_res_cat:"))
 async def adm_res_start(callback: CallbackQuery, state: FSMContext):
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("Admin only.", show_alert=True)
+        return
     await callback.answer()
     cat = callback.data.split(":", 1)[1]
     card_id = (await state.get_data()).get("card_msg_id")
@@ -219,7 +265,7 @@ async def adm_res_start(callback: CallbackQuery, state: FSMContext):
             callback.bot,
             callback.message.chat.id,
             state,
-            "🎓 <b>COC Track</b>:",
+            "🎓 <b>COC Track (1st Year Only)</b>:",
             InlineKeyboardMarkup(inline_keyboard=rows),
             prefer_msg=callback.message,
         )
@@ -279,7 +325,7 @@ async def adm_coc_trk_picked(callback: CallbackQuery, state: FSMContext):
         callback.bot,
         callback.message.chat.id,
         state,
-        f"COC · {trk_label}",
+        f"1st Yr COC · {trk_label}",
         "adm_res_cat:coc",
         prefer_msg=callback.message,
     )
@@ -408,7 +454,7 @@ async def adm_bulk_save_all(callback: CallbackQuery, state: FSMContext):
 
     saved_count = 0
     for item in files:
-        await create_resource_entry(
+        await _save_resource_item(
             category=cat,
             title=item["title"],
             course_id=cid,
@@ -539,7 +585,7 @@ async def adm_exam_save_payload(message: Message, state: FSMContext):
         await message.answer(f"❌ <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
         return
 
-    await create_resource_entry(
+    await _save_resource_item(
         category="worksheet",
         title=f"Exam[{qtype.upper()}]: {raw[:45]}",
         course_id=cid,
