@@ -35,6 +35,27 @@ REFERRAL_REWARD_ETB = 30
 COURSES_PER_PAGE = 10
 RESOURCES_PER_PAGE = 6
 
+YEAR_LABELS: dict[int, str] = {
+    1: "1st Year",
+    2: "2nd Year",
+    3: "3rd Year",
+}
+
+YEAR_BADGES: dict[int, str] = {
+    1: "🎓 1st Year (Freshman)",
+    2: "📘 2nd Year",
+    3: "📙 3rd Year",
+}
+
+YEAR_FEATURE_BUTTONS: list[tuple[str, str]] = [
+    ("📚 Modules", "modules"),
+    ("🗒 Study Notes", "notes"),
+    ("📝 Mid-Exams", "mid_exams"),
+    ("🎓 Final Exams", "final_exams"),
+    ("⏱ Timed Quiz", "quiz"),
+    ("🃏 Flashcards", "flashcards"),
+]
+
 DIRECT_COURSE_FEATURES = {"modules", "mid_exams", "final_exams", "notes"}
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 
@@ -53,18 +74,26 @@ SUPPORT_TOPICS = {
 }
 
 
+def _parse_year_num(val: str | int | None) -> int:
+    try:
+        num = int(val)
+        return num if num in YEAR_LABELS else 1
+    except (TypeError, ValueError):
+        return 1
+
+
 def is_direct_feature(feature_key: str) -> bool:
     return feature_key in DIRECT_COURSE_FEATURES or is_direct_access_feature(feature_key)
 
 
 def build_resource_caption(title: str) -> str:
+    safe_title = html.escape(title or "Study Resource")
     return (
-        f"📘 <b>{title}</b>\n\n"
+        f"📘 <b>{safe_title}</b>\n\n"
         f"🎓 Curated for <b>Ethiopian University Students</b> by <b>QineSystems</b>.\n"
         f"📢 <b>Official Channel:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n"
         f"🤖 <b>Study Bot:</b> @QineSystems_bot"
     )
-
 
 
 async def safe_edit_message(
@@ -96,6 +125,8 @@ async def _show_premium_required_card(
     back_cb: str,
 ):
     await callback.answer()
+    safe_feat = html.escape(feature_title)
+    safe_sel = html.escape(selection_label)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👑 View Premium & Upgrade", callback_data="nav:membership")],
         back_and_home_row(back_cb),
@@ -103,14 +134,14 @@ async def _show_premium_required_card(
     await safe_edit_message(
         callback,
         (
-            f"🔒 <b>{feature_title} — Premium Access</b>\n\n"
-            f"📌 <b>Selected:</b> {selection_label}\n\n"
-            f"Unlock <b>{feature_title}</b> and supercharge your studies! You need an active "
+            f"🔒 <b>{safe_feat} — Premium Access</b>\n\n"
+            f"📌 <b>Selected:</b> {safe_sel}\n\n"
+            f"Unlock <b>{safe_feat}</b> and supercharge your studies! You need an active "
             f"<b>Qine Plus</b> or <b>Qine Pro</b> membership to view these materials.\n\n"
             f"✨ <b>Why Upgrade?</b>\n"
-            f"• Unlimited access to exclusive notes, past exams & guides\n"
-            f"• Full access to the <b>AlgoMage AI Assistant Suite</b>\n"
-            f"• faster study sessions anytime\n\n"
+            f"• Unlimited access to exclusive notes, past exams &amp; guides\n"
+            f"• Full access to the <b>QineSystems AI Study Assistant Suite</b>\n"
+            f"• Faster study sessions anytime\n\n"
             f"👇 <i>Choose an option below to upgrade or go back:</i>"
         ),
         reply_markup=kb,
@@ -133,7 +164,7 @@ def get_live_admin_ids() -> list[int]:
 
 def format_plan_badge(student: Student) -> str:
     if has_active_premium(student):
-        clean_name = student.plan_code.replace("_", " ")
+        clean_name = html.escape(student.plan_code.replace("_", " "))
         return f"💎 {clean_name}"
     return "🟢 Free Plan"
 
@@ -164,24 +195,24 @@ class DailyChallengeFlow(StatesGroup):
 def build_main_menu(user_id: int | None = None) -> InlineKeyboardMarkup:
     rows = [
         [
-            InlineKeyboardButton(text="📚 Courses & Materials", callback_data="nav:my_courses"),
-            InlineKeyboardButton(text="📝 take Quizz", callback_data="feat:quiz"),
+            InlineKeyboardButton(text="🎓 1st Year", callback_data="yr:1"),
+            InlineKeyboardButton(text="📘 2nd Year", callback_data="yr:2"),
+            InlineKeyboardButton(text="📙 3rd Year", callback_data="yr:3"),
         ],
         [
-            InlineKeyboardButton(text="🤖 AI Study Assistant", callback_data="feat:ai_assistant"),
+            InlineKeyboardButton(text="🤖 AI Study & Help", callback_data="feat:ai_assistant"),
+            InlineKeyboardButton(text="⚡ Daily Challenge", callback_data="dc:hub"),
+        ],
+        [
             InlineKeyboardButton(text="📊 My Progress", callback_data="nav:my_progress"),
+            InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard:weekly"),
         ],
         [
-            InlineKeyboardButton(text="🎓 Mid Exams", callback_data="feat:mid_exams"),
-            InlineKeyboardButton(text="🎓 Final Exams", callback_data="feat:final_exams"),
-        ],
-        [
-            InlineKeyboardButton(text="💎 Premium Membership", callback_data="nav:membership"),
+            InlineKeyboardButton(text="💎 Membership", callback_data="nav:membership"),
             InlineKeyboardButton(text="🆘 Support & Community", callback_data="nav:help"),
         ],
         [
-            InlineKeyboardButton(text="🤖 AI Help", callback_data="nav:ai_help"),
-            InlineKeyboardButton(text="🎁 Referral", callback_data="nav:referral"),
+            InlineKeyboardButton(text="🎁 Referral Hub", callback_data="nav:referral"),
         ],
     ]
 
@@ -200,7 +231,30 @@ def back_and_home_row(back_cb: str) -> list[InlineKeyboardButton]:
     ]
 
 
-# --- 1. /start & Main Menu ---
+def build_year_hub_keyboard(year_num: int) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for i in range(0, len(YEAR_FEATURE_BUTTONS), 2):
+        pair = [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"yr_feat:{year_num}:{fkey}",
+            )
+            for label, fkey in YEAR_FEATURE_BUTTONS[i:i + 2]
+        ]
+        rows.append(pair)
+
+    rows.append([
+        InlineKeyboardButton(text="📂 Study Resources", callback_data=f"yr_res:{year_num}"),
+        InlineKeyboardButton(text="🔍 Search Materials", callback_data="feat:search"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🔄 Switch Year", callback_data="nav:main"),
+        InlineKeyboardButton(text="🏠 Main Menu", callback_data="nav:main"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# --- 1. /start, Main Menu & Academic Year Hubs ---
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
@@ -218,12 +272,10 @@ async def cmd_start(message: Message, state: FSMContext):
         f"<i>Your digital study companion for Ethiopian university courses.</i>\n\n"
         f"👤 <b>Account:</b> {safe_name} · <b>{plan_badge}</b>\n"
         f"📢 <b>Updates:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
-        f"<b>✨ What you can do here:</b>\n"
-        f"• 📚 <b>Study:</b> Access modules, notes, worksheets &amp; past exams\n"
-        f"• 📝 <b>Practice:</b> Take timed quizzes &amp; daily challenges\n"
-        f"• 🤖 <b>Ask AI:</b> Solve math, summarize notes &amp; prep for exams\n"
-        f"• 📊 <b>Track:</b> Monitor your accuracy, streak &amp; leaderboard rank\n\n"
-        f"👇 <b>Tap a section below to begin:</b>",
+        f"<b>✨ How to get started:</b>\n"
+        f"• <b>Pick Your Year:</b> Open <b>1st</b>, <b>2nd</b>, or <b>3rd Year</b> for modules, notes, exams &amp; quizzes\n"
+        f"• <b>Universal Tools:</b> Use <b>AI Study &amp; Help</b>, <b>Daily Challenge</b>, <b>Progress</b> &amp; <b>Leaderboard</b> anytime\n\n"
+        f"👇 <b>Choose your academic year or a study tool below:</b>",
         reply_markup=build_main_menu(message.from_user.id),
         parse_mode="HTML",
         disable_web_page_preview=True,
@@ -239,19 +291,314 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
         plan_badge = format_plan_badge(student)
         full_name = student.full_name
 
+    safe_name = html.escape(full_name or "Student")
     text = (
         f"🎓 <b>QineSystems Dashboard</b>\n"
         f"<i>Learn. Practice. Improve. Achieve.</i>\n\n"
-        f"👤 <b>{full_name}</b> · <b>{plan_badge}</b>\n"
+        f"👤 <b>{safe_name}</b> · <b>{plan_badge}</b>\n"
         f"📢 <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>\n\n"
-        f"<b>Quick Actions:</b>\n"
-        f"• <b>Courses &amp; Materials:</b> Browse courses, notes, exams &amp; search\n"
-        f"• <b>Quiz &amp; Exams:</b> Test chapters &amp; build exam confidence\n"
-        f"• <b>AI Study Assistant:</b> Get step-by-step study &amp; exam help\n"
-        f"• <b>My Progress:</b> Check accuracy, XP &amp; daily streak\n\n"
+        f"<b>Academic Years:</b>\n"
+        f"• <b>1st / 2nd / 3rd Year:</b> Year-specific courses, notes, exams, quizzes &amp; study resources\n\n"
+        f"<b>Shared Study Hub:</b>\n"
+        f"• <b>AI Study &amp; Help</b> · <b>Daily Challenge</b> · <b>Progress</b> · <b>Leaderboard</b>\n\n"
         f"👇 <b>What would you like to work on today?</b>"
     )
     await safe_edit_message(callback, text, reply_markup=build_main_menu(callback.from_user.id))
+
+
+@router.callback_query(F.data.startswith("yr:"))
+async def cb_open_year_hub(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    year_num = _parse_year_num(callback.data.split(":", 1)[1])
+    year_label = YEAR_LABELS[year_num]
+    year_badge = YEAR_BADGES[year_num]
+
+    async with AsyncSessionLocal() as db:
+        courses = await get_all_courses_for_feature(db, "modules", year_level=year_label)
+
+    await callback.answer()
+    course_preview = (
+        ", ".join(html.escape(c.name) for c in courses[:5])
+        + (f" +{len(courses) - 5} more" if len(courses) > 5 else "")
+        if courses
+        else "<i>Courses being organized for this year</i>"
+    )
+    coc_note = (
+        "• 📜 <b>COC Past Exams</b> included for <b>1st Year</b>\n"
+        if year_num == 1
+        else "• <i>COC Past Exams apply to 1st Year only</i>\n"
+    )
+
+    text = (
+        f"{year_badge} <b>Study Hub</b>\n"
+        f"<i>Focused materials &amp; practice tailored to {year_label}.</i>\n\n"
+        f"📚 <b>Courses ({len(courses)}):</b> {course_preview}\n\n"
+        f"<b>Available in {year_label}:</b>\n"
+        f"• 📚 Modules, 🗒 Notes, 📝 Mid-Exams &amp; 🎓 Final Exams\n"
+        f"• ⏱ Timed Quizzes &amp; 🃏 Flashcards\n"
+        f"• 📂 Study Resources (Worksheets, አጤሬራ, Reference Books)\n"
+        f"{coc_note}\n"
+        f"👇 <b>Select a category below:</b>"
+    )
+    await safe_edit_message(callback, text, reply_markup=build_year_hub_keyboard(year_num))
+
+
+@router.callback_query(F.data.startswith("yr_res:"))
+async def cb_year_study_resources(callback: CallbackQuery, state: FSMContext):
+    year_num = _parse_year_num(callback.data.split(":", 1)[1])
+    year_label = YEAR_LABELS[year_num]
+    year_badge = YEAR_BADGES[year_num]
+
+    async with AsyncSessionLocal() as db:
+        student = await get_or_create_student(db, callback.from_user)
+        allowed, feature = await check_feature_entitlement(db, student, "more_resources")
+        if not feature or not feature.is_enabled:
+            await callback.answer("Study Resources is currently disabled.", show_alert=True)
+            return
+        if not allowed:
+            await _show_premium_required_card(
+                callback,
+                "Study Resources",
+                f"{year_label} Study Resources",
+                f"yr:{year_num}",
+            )
+            return
+
+    await state.clear()
+    await callback.answer()
+
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="📋 Worksheets", callback_data=f"yrcat:{year_num}:worksheets")],
+    ]
+    if year_num == 1:
+        rows.append([InlineKeyboardButton(text="📜 COC Past Exams", callback_data=f"yrcat:{year_num}:coc")])
+    rows.append([
+        InlineKeyboardButton(text="📄 አጤሬራ", callback_data=f"yrcat:{year_num}:atirera"),
+        InlineKeyboardButton(text="📚 Reference Books", callback_data=f"yrcat:{year_num}:refbooks"),
+    ])
+    rows.append(back_and_home_row(f"yr:{year_num}"))
+
+    coc_line = "• 📜 <b>COC Past Exams:</b> Track-based COC prep (1st Year)\n" if year_num == 1 else ""
+    text = (
+        f"📂 <b>{year_badge} — Study Resources</b>\n\n"
+        f"Select a resource category for <b>{year_label}</b>:\n"
+        f"• 📋 <b>Worksheets:</b> Practice sheets filtered by {year_label} courses\n"
+        f"{coc_line}"
+        f"• 📄 <b>አጤሬራ:</b> Chapter summaries &amp; exam highlights\n"
+        f"• 📚 <b>Reference Books:</b> Textbooks &amp; extra reading guides"
+    )
+    await safe_edit_message(callback, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(F.data.startswith("yrcat:"))
+async def cb_year_resource_category(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split(":", 2)
+    if len(parts) < 3:
+        await callback.answer("Invalid selection.", show_alert=True)
+        return
+
+    year_num = _parse_year_num(parts[1])
+    cat_key = parts[2]
+    year_label = YEAR_LABELS[year_num]
+
+    # COC is strictly for 1st Year only
+    if cat_key == "coc" and year_num != 1:
+        await callback.answer("COC Past Exams are available for 1st Year only.", show_alert=True)
+        return
+
+    if cat_key == "coc":
+        # Reuse existing COC track handler if available
+        callback.data = "res_cat:coc"
+        await cb_resources_hub(callback, state)
+        return
+
+    cat_titles = {
+        "worksheets": "📋 Worksheets",
+        "atirera": "📄 አጤሬራ",
+        "refbooks": "📚 Reference Books",
+    }
+    cat_label = cat_titles.get(cat_key, "📂 Study Resources")
+
+    async with AsyncSessionLocal() as db:
+        student = await get_or_create_student(db, callback.from_user)
+        allowed, feature = await check_feature_entitlement(db, student, "more_resources")
+        if not feature or not feature.is_enabled:
+            await callback.answer("Study Resources is currently disabled.", show_alert=True)
+            return
+        if not allowed:
+            await _show_premium_required_card(
+                callback,
+                cat_label,
+                f"{year_label} · {cat_label}",
+                f"yr_res:{year_num}",
+            )
+            return
+        courses = await get_all_courses_for_feature(db, "more_resources", year_level=year_label)
+
+    await callback.answer()
+    if not courses:
+        await safe_edit_message(
+            callback,
+            build_coming_soon_message(cat_label, f"{year_label} courses"),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"yr_res:{year_num}")]),
+        )
+        return
+
+    buttons: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for c in courses:
+        row.append(
+            InlineKeyboardButton(
+                text=f"📚 {c.name}",
+                callback_data=f"yr_rcrs:{year_num}:{cat_key}:{c.id}",
+            )
+        )
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append(back_and_home_row(f"yr_res:{year_num}"))
+
+    await safe_edit_message(
+        callback,
+        f"<b>{cat_label}</b> → <b>{year_label}</b>\nSelect a course below:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+
+
+@router.callback_query(F.data.startswith("yr_rcrs:"))
+async def cb_year_resource_course(callback: CallbackQuery):
+    parts = callback.data.split(":", 3)
+    if len(parts) < 4:
+        await callback.answer("Invalid selection.", show_alert=True)
+        return
+
+    year_num = _parse_year_num(parts[1])
+    cat_key = parts[2]
+    course_id = int(parts[3])
+    year_label = YEAR_LABELS[year_num]
+
+    cat_titles = {
+        "worksheets": "📋 Worksheets",
+        "atirera": "📄 አጤሬራ",
+        "refbooks": "📚 Reference Books",
+    }
+    cat_label = cat_titles.get(cat_key, "📂 Study Resources")
+
+    async with AsyncSessionLocal() as db:
+        student = await get_or_create_student(db, callback.from_user)
+        allowed, feature = await check_feature_entitlement(db, student, "more_resources")
+        if not feature or not feature.is_enabled:
+            await callback.answer("Study Resources is currently disabled.", show_alert=True)
+            return
+        if not allowed:
+            await _show_premium_required_card(callback, cat_label, f"{year_label} · {cat_label}", f"yrcat:{year_num}:{cat_key}")
+            return
+
+        course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
+        if not course:
+            await callback.answer("Course not found.", show_alert=True)
+            return
+
+        resources = (await db.execute(
+            select(LearningResource)
+            .join(Chapter, LearningResource.chapter_id == Chapter.id)
+            .where(
+                Chapter.course_id == course_id,
+                LearningResource.feature_key == "more_resources",
+                LearningResource.is_published == True,
+            )
+            .order_by(Chapter.chapter_number, LearningResource.id)
+        )).scalars().all()
+
+        # Match category keyword in title if tagged, otherwise show all published more_resources for that course
+        cat_keywords = {
+            "worksheets": ["worksheet"],
+            "atirera": ["atirera", "አጤሬራ"],
+            "refbooks": ["book", "reference", "textbook"],
+        }
+        keywords = cat_keywords.get(cat_key, [])
+        filtered = [
+            r for r in resources
+            if any(kw in (r.title or "").lower() for kw in keywords)
+        ]
+        display_resources = filtered if filtered else list(resources)
+
+    await callback.answer()
+    if not display_resources:
+        await safe_edit_message(
+            callback,
+            build_coming_soon_message(cat_label, f"{course.name} ({year_label})"),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"yrcat:{year_num}:{cat_key}")]),
+        )
+        return
+
+    buttons = [
+        [InlineKeyboardButton(text=f"📄 {res.title}", callback_data=f"res:{res.id}:{course_id}")]
+        for res in display_resources[:12]
+    ]
+    buttons.append(back_and_home_row(f"yrcat:{year_num}:{cat_key}"))
+
+    await safe_edit_message(
+        callback,
+        f"<b>{cat_label}</b> → <b>{html.escape(course.name)}</b> (<i>{year_label}</i>)\nSelect a file below:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+
+
+@router.callback_query(F.data.startswith("yr_feat:"))
+async def cb_year_feature_courses(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split(":", 2)
+    if len(parts) < 3:
+        await callback.answer("Invalid selection.", show_alert=True)
+        return
+
+    year_num = _parse_year_num(parts[1])
+    feature_key = parts[2]
+    year_label = YEAR_LABELS[year_num]
+
+    if feature_key == "ai_assistant":
+        await show_ai_suite(callback, state)
+        return
+
+    if feature_key == "more_resources":
+        callback.data = f"yr_res:{year_num}"
+        await cb_year_study_resources(callback, state)
+        return
+
+    async with AsyncSessionLocal() as db:
+        feature = (
+            await db.execute(select(FeatureConfig).where(FeatureConfig.key == feature_key))
+        ).scalar_one_or_none()
+        if not feature or not feature.is_enabled:
+            await callback.answer("This feature is currently disabled by administrators.", show_alert=True)
+            return
+        courses = await get_all_courses_for_feature(db, feature_key, year_level=year_label)
+
+    await callback.answer()
+    if not courses:
+        await safe_edit_message(
+            callback,
+            build_coming_soon_message(feature.title, f"{year_label} courses"),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"yr:{year_num}")]),
+        )
+        return
+
+    kb, page_num, total_pages = build_paginated_courses_keyboard(
+        courses=courses,
+        feature_key=feature_key,
+        back_target=f"yr:{year_num}",
+        page=0,
+        year_num=year_num,
+    )
+    await safe_edit_message(
+        callback,
+        f"<b>{feature.title}</b> → <b>{year_label}</b> (Page {page_num}/{total_pages})\n"
+        f"Select a {year_label} course below:",
+        reply_markup=kb,
+    )
+
 
 # --- 2. Free Tools vs. Premium Tools Grouping ---
 @router.callback_query(F.data == "nav:free_tools")
@@ -270,16 +617,21 @@ async def cb_free_tools(callback: CallbackQuery):
     await safe_edit_message(
         callback,
         "🟢 <b>Free Learning Resources</b>\n\n"
-        "Explore freshman course materials, including study modules, mid-semester exams, and study notes, all available for free.",
+        "Explore university course materials, including study modules, mid-semester exams, and study notes, all available for free.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
+
+
 def build_coming_soon_message(area_title: str, subject_label: str = "this specific course") -> str:
+    safe_area = html.escape(area_title)
+    safe_sub = html.escape(subject_label)
     return (
-        f"🚀 <b>{area_title} — Coming Soon!</b>\n\n"
+        f"🚀 <b>{safe_area} — Coming Soon!</b>\n\n"
         f"Something big is on the way for your exam prep! <b>QineSystems</b> is actively preparing "
-        f"specialized <b>{area_title.lower()}</b> for <b>{subject_label}</b>.\n\n"
+        f"specialized <b>{safe_area.lower()}</b> for <b>{safe_sub}</b>.\n\n"
         f"📢 Join <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a> and stay tuned so you’re the first to get access!"
     )
+
 
 @router.callback_query(F.data == "nav:premium_tools")
 async def cb_premium_tools(callback: CallbackQuery):
@@ -332,18 +684,18 @@ async def show_ai_suite(callback: CallbackQuery, state: FSMContext | None = None
         ]
         for i in range(0, len(tools), 2)
     ]
-    rows.append(back_and_home_row("nav:premium_tools"))
+    rows.append(back_and_home_row("nav:main"))
 
     text = (
-        "🤖 <b>AlgoMage AI Assistant Suite</b>\n\n"
-        "Your personal 24/7 study companion! Choose a specialized tool below to boost your learning:\n\n"
-        "🧑‍🏫 <b>AI Tutor</b> – Get step-by-step explanations on tough concepts\n"
-        "❓ <b>Ask AI</b> – Quick answers to any general academic question\n"
+        "🤖 <b>QineSystems AI Study Suite</b>\n"
+        "<i>Available across all academic years — 24/7 study support.</i>\n\n"
+        "🧑‍🏫 <b>AI Tutor</b> – Step-by-step explanations on tough concepts\n"
+        "❓ <b>Ask AI</b> – Quick answers to any academic question\n"
         "➗ <b>Math Solver</b> – Solve equations with detailed workings\n"
         "🗣 <b>English Coach</b> – Practice grammar, writing, and fluency\n"
         "💻 <b>Coding Assistant</b> – Debug, write, and understand code\n"
         "📝 <b>Exam Prep</b> – Generate practice quizzes and mock questions\n"
-        "📄 <b>Document Q&A</b> – Upload notes or PDFs and ask questions\n"
+        "📄 <b>Document Q&amp;A</b> – Upload notes or PDFs and ask questions\n"
         "📋 <b>Summarize</b> – Turn long lectures into crisp study notes\n\n"
         "👇 <i>Tap a mode below to begin:</i>"
     )
@@ -352,7 +704,6 @@ async def show_ai_suite(callback: CallbackQuery, state: FSMContext | None = None
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
-
 
 
 @router.callback_query(F.data == "feat:ai_assistant")
@@ -365,6 +716,7 @@ def build_paginated_courses_keyboard(
     feature_key: str,
     back_target: str,
     page: int = 0,
+    year_num: int | None = None,
 ) -> tuple[InlineKeyboardMarkup, int, int]:
     total_courses = len(courses)
     total_pages = max(1, (total_courses + COURSES_PER_PAGE - 1) // COURSES_PER_PAGE)
@@ -375,11 +727,16 @@ def build_paginated_courses_keyboard(
     page_courses = courses[start_idx:end_idx]
     remaining_after = max(0, total_courses - end_idx)
 
+    yr_suffix = f":{year_num}" if year_num is not None else ""
+
     rows: list[list[InlineKeyboardButton]] = []
     current_row: list[InlineKeyboardButton] = []
     for c in page_courses:
         current_row.append(
-            InlineKeyboardButton(text=f"📚 {c.name}", callback_data=f"crs:{feature_key}:{c.id}")
+            InlineKeyboardButton(
+                text=f"📚 {c.name}",
+                callback_data=f"crs:{feature_key}:{c.id}{yr_suffix}",
+            )
         )
         if len(current_row) == 2:
             rows.append(current_row)
@@ -391,21 +748,21 @@ def build_paginated_courses_keyboard(
         rows.append([
             InlineKeyboardButton(
                 text=f"Other Courses ({remaining_after} more) ➡️",
-                callback_data=f"cpage:{feature_key}:1",
+                callback_data=f"cpage:{feature_key}:1{yr_suffix}",
             )
         ])
     elif current_page > 0:
         nav_step_row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
                 text="⬅️ Previous",
-                callback_data=f"cpage:{feature_key}:{current_page - 1}",
+                callback_data=f"cpage:{feature_key}:{current_page - 1}{yr_suffix}",
             )
         ]
         if remaining_after > 0:
             nav_step_row.append(
                 InlineKeyboardButton(
                     text="Next ➡️",
-                    callback_data=f"cpage:{feature_key}:{current_page + 1}",
+                    callback_data=f"cpage:{feature_key}:{current_page + 1}{yr_suffix}",
                 )
             )
         rows.append(nav_step_row)
@@ -416,12 +773,15 @@ def build_paginated_courses_keyboard(
 
 @router.callback_query(F.data.startswith("cpage:"))
 async def cb_paginate_courses(callback: CallbackQuery):
-    parts = callback.data.split(":", 2)
+    parts = callback.data.split(":")
     if len(parts) < 3:
         await callback.answer("Invalid page.", show_alert=True)
         return
 
-    _, feature_key, page_str = parts
+    feature_key = parts[1]
+    page_str = parts[2]
+    year_num = _parse_year_num(parts[3]) if len(parts) >= 4 else None
+    year_label = YEAR_LABELS.get(year_num) if year_num else None
     target_page = int(page_str) if page_str.isdigit() else 0
 
     async with AsyncSessionLocal() as db:
@@ -429,20 +789,22 @@ async def cb_paginate_courses(callback: CallbackQuery):
         if not feature or not feature.is_enabled:
             await callback.answer("This feature is currently disabled.", show_alert=True)
             return
-        courses = await get_all_courses_for_feature(db, feature_key)
+        courses = await get_all_courses_for_feature(db, feature_key, year_level=year_label)
 
     await callback.answer()
-    back_target = "nav:free_tools" if feature.is_free else "nav:premium_tools"
+    back_target = f"yr:{year_num}" if year_num else ("nav:free_tools" if feature.is_free else "nav:premium_tools")
     kb, page_num, total_pages = build_paginated_courses_keyboard(
         courses=courses,
         feature_key=feature_key,
         back_target=back_target,
         page=target_page,
+        year_num=year_num,
     )
 
+    scope_label = f"{feature.title} · {year_label}" if year_label else feature.title
     await safe_edit_message(
         callback,
-        f"<b>{feature.title}</b> → <b>Select Course</b> (Page {page_num}/{total_pages})\n"
+        f"<b>{scope_label}</b> → <b>Select Course</b> (Page {page_num}/{total_pages})\n"
         f"Select a course below:",
         reply_markup=kb,
     )
@@ -478,7 +840,7 @@ async def cb_open_feature(callback: CallbackQuery, state: FSMContext):
                     "Looking for something specific? Type and send a keyword, topic, or title "
                     "to find published notes, past exams, and study guides.\n\n"
                     "💡 <b>Search Tips:</b>\n"
-                    "• Use specific subjects or course codes (e.g., <i>Biology</i>, <i>Mathematics</i>)\n"
+                    "• Use specific subjects or course names (e.g., <i>Biology</i>, <i>Database</i>)\n"
                     "• Search by topic (e.g., <i>Personality</i>, <i>Thermodynamics</i>)\n"
                     "• Keep it brief—1 to 3 words usually works best!"
                 ),
@@ -725,26 +1087,28 @@ async def cb_paginate_resources(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("dpage:"))
 async def cb_paginate_direct_resources(callback: CallbackQuery):
-    parts = callback.data.split(":", 3)
+    parts = callback.data.split(":")
     if len(parts) < 4:
         await callback.answer("Invalid page.", show_alert=True)
         return
 
-    _, feature_key, course_id_str, page_str = parts
-    course_id = int(course_id_str)
-    target_page = max(0, int(page_str))
+    feature_key = parts[1]
+    course_id = int(parts[2])
+    target_page = max(0, int(parts[3]))
+    year_num = _parse_year_num(parts[4]) if len(parts) >= 5 else None
+    back_cb = f"yr_feat:{year_num}:{feature_key}" if year_num else f"feat:{feature_key}"
 
     async with AsyncSessionLocal() as db:
         student = await get_or_create_student(db, callback.from_user)
         allowed, feature = await check_feature_entitlement(db, student, feature_key)
         course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
-        course_label = course.name if course else "Course"
+        course_label = html.escape(course.name) if course else "Course"
 
         if not feature or not feature.is_enabled:
             await callback.answer("This feature is currently disabled.", show_alert=True)
             return
         if not allowed:
-            await _show_premium_required_card(callback, feature.title, course_label, f"feat:{feature_key}")
+            await _show_premium_required_card(callback, feature.title, course_label, back_cb)
             return
 
         stmt = (
@@ -771,6 +1135,7 @@ async def cb_paginate_direct_resources(callback: CallbackQuery):
     page_items = resources[start_idx:end_idx]
     remaining_after = max(0, len(resources) - end_idx)
 
+    yr_suffix = f":{year_num}" if year_num is not None else ""
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=f"📄 {res.title}", callback_data=f"res:{res.id}:{course_id}")]
         for res in page_items
@@ -780,26 +1145,26 @@ async def cb_paginate_direct_resources(callback: CallbackQuery):
         rows.append([
             InlineKeyboardButton(
                 text=f"More ({remaining_after} more) ➡️",
-                callback_data=f"dpage:{feature_key}:{course_id}:1",
+                callback_data=f"dpage:{feature_key}:{course_id}:1{yr_suffix}",
             )
         ])
     elif current_page > 0:
         nav_row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
                 text="⬅️ Previous",
-                callback_data=f"dpage:{feature_key}:{course_id}:{current_page - 1}",
+                callback_data=f"dpage:{feature_key}:{course_id}:{current_page - 1}{yr_suffix}",
             )
         ]
         if remaining_after > 0:
             nav_row.append(
                 InlineKeyboardButton(
                     text="Next ➡️",
-                    callback_data=f"dpage:{feature_key}:{course_id}:{current_page + 1}",
+                    callback_data=f"dpage:{feature_key}:{course_id}:{current_page + 1}{yr_suffix}",
                 )
             )
         rows.append(nav_row)
 
-    rows.append(back_and_home_row(f"feat:{feature_key}"))
+    rows.append(back_and_home_row(back_cb))
     await safe_edit_message(
         callback,
         f"<b>{feature.title}</b> → <b>{course_label}</b> (Page {current_page + 1}/{total_pages})\n"
@@ -811,8 +1176,16 @@ async def cb_paginate_direct_resources(callback: CallbackQuery):
 # --- 4. Course Selection (Gate on Course Tap for Direct Features; Show Chapters for Chapter Features) ---
 @router.callback_query(F.data.startswith("crs:"))
 async def cb_select_course(callback: CallbackQuery):
-    _, feature_key, course_id_str = callback.data.split(":", 2)
-    course_id = int(course_id_str)
+    parts = callback.data.split(":")
+    if len(parts) < 3:
+        await callback.answer("Invalid course selection.", show_alert=True)
+        return
+
+    feature_key = parts[1]
+    course_id = int(parts[2])
+    year_num = _parse_year_num(parts[3]) if len(parts) >= 4 else None
+    back_cb = f"yr_feat:{year_num}:{feature_key}" if year_num else f"feat:{feature_key}"
+    yr_suffix = f":{year_num}" if year_num is not None else ""
 
     async with AsyncSessionLocal() as db:
         student = await get_or_create_student(db, callback.from_user)
@@ -826,13 +1199,15 @@ async def cb_select_course(callback: CallbackQuery):
             await callback.answer("Course not found.", show_alert=True)
             return
 
+        safe_course = html.escape(course.name)
+
         if is_direct_feature(feature_key):
             if not allowed:
                 await _show_premium_required_card(
                     callback,
                     feature.title,
                     f"{feature.title} · {course.name}",
-                    f"feat:{feature_key}",
+                    back_cb,
                 )
                 return
 
@@ -852,7 +1227,7 @@ async def cb_select_course(callback: CallbackQuery):
                 await safe_edit_message(
                     callback,
                     build_coming_soon_message(feature.title, course.name),
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"feat:{feature_key}")]),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(back_cb)]),
                 )
                 return
 
@@ -867,14 +1242,14 @@ async def cb_select_course(callback: CallbackQuery):
                 rows_with_feat.append([
                     InlineKeyboardButton(
                         text=f"More ({remaining_after} more) ➡️",
-                        callback_data=f"dpage:{feature_key}:{course_id}:1",
+                        callback_data=f"dpage:{feature_key}:{course_id}:1{yr_suffix}",
                     )
                 ])
-            rows_with_feat.append(back_and_home_row(f"feat:{feature_key}"))
+            rows_with_feat.append(back_and_home_row(back_cb))
 
             await safe_edit_message(
                 callback,
-                f"<b>{feature.title}</b> → <b>{course.name}</b> (Page 1/{total_pages})\n"
+                f"<b>{feature.title}</b> → <b>{safe_course}</b> (Page 1/{total_pages})\n"
                 f"Select a file or resource below:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows_with_feat),
             )
@@ -886,7 +1261,7 @@ async def cb_select_course(callback: CallbackQuery):
             await safe_edit_message(
                 callback,
                 build_coming_soon_message(feature.title, course.name),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"feat:{feature_key}")]),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(back_cb)]),
             )
             return
 
@@ -894,15 +1269,17 @@ async def cb_select_course(callback: CallbackQuery):
         buttons = [
             [InlineKeyboardButton(
                 text=f"{'🟢' if has_content else '🔴'} Chapter {ch.chapter_number}",
-                callback_data=f"chp:{feature_key}:{course_id}:{ch.id}",
+                callback_data=f"chp:{feature_key}:{course_id}:{ch.id}{yr_suffix}",
             )]
             for ch, has_content in chapter_tuples
         ]
-        buttons.append(back_and_home_row(f"feat:{feature_key}"))
+        buttons.append(back_and_home_row(back_cb))
 
         await safe_edit_message(
             callback,
-            f"<b>{feature.title}</b> → <b>{course.name}</b>\nSelect a chapter:",
+            f"<b>{feature.title}</b> → <b>{safe_course}</b>\n"
+            f"<i>🟢 Ready to study · 🔴 Coming soon</i>\n"
+            f"Select a chapter:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         )
 
@@ -910,8 +1287,17 @@ async def cb_select_course(callback: CallbackQuery):
 # --- 5. Chapter Selection (Gate on Chapter Tap for Chapter Features) ---
 @router.callback_query(F.data.startswith("chp:"))
 async def cb_select_chapter(callback: CallbackQuery):
-    _, feature_key, course_id_str, chapter_id_str = callback.data.split(":", 3)
-    course_id, chapter_id = int(course_id_str), int(chapter_id_str)
+    parts = callback.data.split(":")
+    if len(parts) < 4:
+        await callback.answer("Invalid chapter selection.", show_alert=True)
+        return
+
+    feature_key = parts[1]
+    course_id = int(parts[2])
+    chapter_id = int(parts[3])
+    year_num = _parse_year_num(parts[4]) if len(parts) >= 5 else None
+    yr_suffix = f":{year_num}" if year_num is not None else ""
+    course_back_cb = f"crs:{feature_key}:{course_id}{yr_suffix}"
 
     async with AsyncSessionLocal() as db:
         student = await get_or_create_student(db, callback.from_user)
@@ -934,7 +1320,7 @@ async def cb_select_chapter(callback: CallbackQuery):
             await safe_edit_message(
                 callback,
                 build_coming_soon_message(feature.title, subject_str),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(f"crs:{feature_key}:{course_id}")]),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(course_back_cb)]),
             )
             return
 
@@ -943,17 +1329,17 @@ async def cb_select_chapter(callback: CallbackQuery):
                 callback,
                 feature.title,
                 f"{feature.title} · Chapter {chapter.chapter_number}",
-                f"crs:{feature_key}:{course_id}",
+                course_back_cb,
             )
             return
 
         if feature_key == "quiz":
             await callback.answer()
             course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
-            course_label = course.name if course else "Course"
+            course_label = html.escape(course.name) if course else "Course"
             chapter_label = (
                 f"Chapter {chapter.chapter_number}"
-                + (f": {chapter.title}" if getattr(chapter, "title", None) else "")
+                + (f": {html.escape(chapter.title)}" if getattr(chapter, "title", None) else "")
             )
 
             all_q = (await db.execute(
@@ -989,7 +1375,7 @@ async def cb_select_chapter(callback: CallbackQuery):
                 display_lvl = label_by_lower.get(key_l, lvl)
                 cnt = counts_lower.get(key_l, 0)
                 icon = level_badges.get(key_l, "⚡")
-                count_lines.append(f"• {display_lvl}: <b>{cnt}</b> {'question' if cnt == 1 else 'questions'}")
+                count_lines.append(f"• {icon} {html.escape(display_lvl)}: <b>{cnt}</b> {'question' if cnt == 1 else 'questions'}")
                 buttons.append([
                     InlineKeyboardButton(
                         text=f"{icon} {display_lvl} ({cnt})",
@@ -997,7 +1383,7 @@ async def cb_select_chapter(callback: CallbackQuery):
                     )
                 ])
 
-            buttons.append([InlineKeyboardButton(text="⬅️ Back to Chapters", callback_data=f"crs:{feature_key}:{course_id}")])
+            buttons.append([InlineKeyboardButton(text="⬅️ Back to Chapters", callback_data=course_back_cb)])
             buttons.append([InlineKeyboardButton(text="🏠 Main Menu", callback_data="nav:main")])
 
             text = (
@@ -1035,7 +1421,7 @@ async def cb_select_chapter(callback: CallbackQuery):
             [InlineKeyboardButton(text=f"📄 {res.title}", callback_data=f"res:{res.id}:{course_id}")]
             for res in resources
         ]
-        buttons.append(back_and_home_row(f"crs:{feature_key}:{course_id}"))
+        buttons.append(back_and_home_row(course_back_cb))
 
         await safe_edit_message(
             callback,
@@ -1127,6 +1513,9 @@ async def cb_start_timed_quiz(callback: CallbackQuery, state: FSMContext):
             await callback.answer("🔒 Premium subscription required.", show_alert=True)
             return
 
+        chap = (await db.execute(select(Chapter).where(Chapter.id == chapter_id))).scalar_one_or_none()
+        course_id = chap.course_id if chap else 0
+
         questions = (await db.execute(
             select(QuizQuestion).where(
                 QuizQuestion.chapter_id == chapter_id,
@@ -1137,10 +1526,11 @@ async def cb_start_timed_quiz(callback: CallbackQuery, state: FSMContext):
 
         if not questions:
             await callback.answer()
-            back_target = f"chp:quiz:{course_id}:{chapter_id}" if course_id else "feat:quiz"
+            back_target = f"chp:quiz:{course_id}:{chapter_id}" if course_id else "nav:main"
+            chap_label = f"Chapter {chap.chapter_number}" if chap else "this chapter"
             await safe_edit_message(
                 callback,
-                build_coming_soon_message(f"Timed Quiz ({level})", f"Chapter {chap.chapter_number}" if chap else "this chapter"),
+                build_coming_soon_message(f"Timed Quiz ({level})", chap_label),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[back_and_home_row(back_target)]),
             )
             return
@@ -1161,6 +1551,7 @@ async def cb_start_timed_quiz(callback: CallbackQuery, state: FSMContext):
     await state.set_state(QuizSession.in_progress)
     await state.update_data(
         chapter_id=chapter_id,
+        course_id=course_id,
         level=level,
         questions=q_list,
         current_index=0,
@@ -1183,7 +1574,12 @@ async def send_quiz_question(message: Message, state: FSMContext, edit: bool = F
     ]
     buttons.append([InlineKeyboardButton(text="🛑 Quit Quiz", callback_data="nav:main")])
 
-    text = f"⏱ <b>Quiz — {data['level']}</b>\nQuestion <b>{idx + 1} of {len(data['questions'])}</b>\n\n{q['text']}"
+    safe_level = html.escape(str(data["level"]))
+    text = (
+        f"⏱ <b>Quiz — {safe_level}</b>\n"
+        f"Question <b>{idx + 1} of {len(data['questions'])}</b>\n\n"
+        f"{q['text']}"
+    )
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     if edit:
         try:
@@ -1254,7 +1650,7 @@ async def cb_finish_quiz(callback: CallbackQuery, state: FSMContext):
     pace_str = _format_duration_mm_ss(total_time)
     bar_str = _build_accuracy_bar(accuracy_pct)
 
-    course_id = 0
+    course_id = int(data.get("course_id", 0))
     async with AsyncSessionLocal() as db:
         db.add(QuizAttempt(
             student_id=callback.from_user.id,
@@ -1264,9 +1660,10 @@ async def cb_finish_quiz(callback: CallbackQuery, state: FSMContext):
             total_questions=total_q,
             duration_seconds=total_time,
         ))
-        chap_obj = (await db.execute(select(Chapter).where(Chapter.id == chapter_id))).scalar_one_or_none()
-        if chap_obj:
-            course_id = chap_obj.course_id
+        if not course_id and chapter_id:
+            chap_obj = (await db.execute(select(Chapter).where(Chapter.id == chapter_id))).scalar_one_or_none()
+            if chap_obj:
+                course_id = chap_obj.course_id
         await db.commit()
 
     if accuracy_pct >= 85.0:
@@ -1292,12 +1689,13 @@ async def cb_finish_quiz(callback: CallbackQuery, state: FSMContext):
         kb_rows.append([InlineKeyboardButton(text="⬅️ Back to Chapters", callback_data=f"crs:quiz:{course_id}")])
     kb_rows.append([InlineKeyboardButton(text="🏠 Main Menu", callback_data="nav:main")])
 
+    safe_level = html.escape(level)
     text = (
         f"🏁 <b>Quiz Completed — {tier_title}</b>\n\n"
-        f"📌 <b>Level:</b> {level} · <b>Score:</b> <b>{score}/{total_q}</b> (<b>{accuracy_pct:.0f}%</b>)\n"
+        f"📌 <b>Level:</b> {safe_level} · <b>Score:</b> <b>{score}/{total_q}</b> (<b>{accuracy_pct:.0f}%</b>)\n"
         f"📊 <b>Accuracy:</b> {bar_str}\n"
         f"⏱ <b>Time Taken:</b> <code>{pace_str}</code> · ✨ <b>XP Earned:</b> <b>+{xp_earned} XP</b>\n\n"
-        f"💡 <b>Coach Note:</b> <i>{advice}</i>\n"
+        f"💡 <b>Coach Note:</b> <i>{html.escape(advice)}</i>\n"
         f"📢 <b>Channel:</b> <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>"
     )
 
@@ -1318,7 +1716,12 @@ async def render_flashcard(callback: CallbackQuery, cards, index: int, course_id
 
     kb = InlineKeyboardMarkup(inline_keyboard=[nav_row, back_and_home_row(f"crs:flashcards:{course_id}")])
     body = card.back_text if show_back else card.front_text
-    await safe_edit_message(callback, f"🃏 <b>Flashcard {index + 1} of {len(cards)}</b>\n\n{body}", reply_markup=kb)
+    side_label = "Back (Answer)" if show_back else "Front (Prompt)"
+    await safe_edit_message(
+        callback,
+        f"🃏 <b>Flashcard {index + 1} of {len(cards)}</b> · <i>{side_label}</i>\n\n{body}",
+        reply_markup=kb,
+    )
 
 
 @router.callback_query(F.data.startswith("fc:"))
@@ -1465,7 +1868,7 @@ async def cb_select_membership_plan(callback: CallbackQuery):
     rows.append(back_and_home_row("nav:main"))
 
     text = (
-        f"💎 <b>{plan.name} — {int(plan.price_etb)} ETB</b>\n"
+        f"💎 <b>{html.escape(plan.name)} — {int(plan.price_etb)} ETB</b>\n"
         f"Current Status: <b>{plan_badge}</b>\n\n"
         f"{plan.benefits_text}\n\n"
         f"Select a payment method below:"
@@ -1522,9 +1925,6 @@ async def cb_initiate_payment(callback: CallbackQuery, state: FSMContext):
         f"📤 Send a photo or document of your payment receipt here once you complete the transfer.",
         reply_markup=kb,
     )
-
-
-from datetime import datetime
 
 
 @router.message(PaymentFlow.waiting_for_receipt, F.photo | F.document)
@@ -1646,6 +2046,7 @@ async def receive_payment_receipt(message: Message, state: FSMContext):
         except Exception:
             pass
 
+
 @router.callback_query(F.data.startswith("adm_pay:"))
 async def cb_admin_review_payment(callback: CallbackQuery):
     if callback.from_user.id not in get_live_admin_ids():
@@ -1669,7 +2070,7 @@ async def cb_admin_review_payment(callback: CallbackQuery):
             await callback.answer("Approved!")
             await callback.bot.send_message(
                 student.telegram_id,
-                f"🎉 <b>Payment Approved!</b> Plan {plan.name} active.\n📢 Channel: <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>",
+                f"🎉 <b>Payment Approved!</b> Plan {html.escape(plan.name)} active.\n📢 Channel: <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>",
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
@@ -1679,8 +2080,9 @@ async def cb_admin_review_payment(callback: CallbackQuery):
             await callback.answer("Rejected.")
             await callback.bot.send_message(student.telegram_id, "⚠️ Payment receipt rejected.", parse_mode="HTML")
     try:
+        safe_admin_name = html.escape(callback.from_user.first_name or "Admin")
         await callback.message.edit_caption(
-            caption=f"{callback.message.caption}\n\nProcessed by {callback.from_user.first_name}",
+            caption=f"{callback.message.caption}\n\nProcessed by {safe_admin_name}",
             parse_mode="HTML",
         )
     except Exception:
@@ -1689,31 +2091,8 @@ async def cb_admin_review_payment(callback: CallbackQuery):
 
 # --- 10. Student Utilities ---
 @router.callback_query(F.data == "nav:my_courses")
-async def cb_my_courses(callback: CallbackQuery):
-    await callback.answer()
-    async with AsyncSessionLocal() as db:
-        courses = (await db.execute(select(Course).where(Course.is_active == True).order_by(Course.name))).scalars().all()
-
-    lines = "\n".join([f"{i+1}. {html.escape(c.name)}" for i, c in enumerate(courses)])
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🔍 Search", callback_data="feat:search"),
-            InlineKeyboardButton(text="🎓 Final Exams", callback_data="feat:final_exams"),
-        ],
-        [
-            InlineKeyboardButton(text="📂 Study Resources", callback_data="nav:resources_hub"),
-            InlineKeyboardButton(text="🟢 Freshman Free", callback_data="nav:free_tools"),
-        ],
-        [
-            InlineKeyboardButton(text="💎 Freshman Pro", callback_data="nav:premium_tools"),
-        ],
-        back_and_home_row("nav:main"),
-    ])
-    await safe_edit_message(
-        callback,
-        f"📖 <b>Courses &amp; Study Materials ({len(courses)} Courses)</b>\n\n{lines}",
-        reply_markup=kb,
-    )
+async def cb_my_courses(callback: CallbackQuery, state: FSMContext):
+    await cb_open_year_hub(callback, state)
 
 
 @router.callback_query(F.data == "nav:my_progress")
@@ -1750,7 +2129,7 @@ async def cb_my_progress(callback: CallbackQuery):
     weakest_avg = 101.0
     for lvl_name, pcts in by_level.items():
         avg_lvl = sum(pcts) / len(pcts)
-        level_breakdown_lines.append(f"  • <b>{lvl_name}:</b> {avg_lvl:.0f}% ({len(pcts)} attempt(s))")
+        level_breakdown_lines.append(f"  • <b>{html.escape(lvl_name)}:</b> {avg_lvl:.0f}% ({len(pcts)} attempt(s))")
         if avg_lvl < weakest_avg:
             weakest_avg = avg_lvl
             weakest_level = lvl_name
@@ -1758,26 +2137,26 @@ async def cb_my_progress(callback: CallbackQuery):
     if total_quizzes == 0:
         readiness_tag = "🌱 Getting Started"
         recommendation = (
-            "Start with a <b>Timed Quiz</b> on a freshman chapter you're currently covering or try today's "
-            "<b>Daily Challenge</b> to earn your first XP and establish a baseline."
+            "Pick your academic year (1st, 2nd, or 3rd Year) to take a chapter quiz or try today's "
+            "Daily Challenge to earn your first XP and set a baseline."
         )
     elif accuracy_pct < 55.0:
         readiness_tag = "📘 Concept Building"
-        focus_hint = f" around <b>{weakest_level}</b> questions" if weakest_level else ""
+        focus_hint = f" around {weakest_level} questions" if weakest_level else ""
         recommendation = (
-            f"Review <b>Study Notes</b> and <b>Study Resources</b> first{focus_hint}, read every quiz explanation carefully, "
+            f"Review Study Notes and Study Resources first{focus_hint}, read every quiz explanation carefully, "
             "and aim for consistent accuracy before jumping to harder sets."
         )
     elif accuracy_pct < 80.0:
         readiness_tag = "💪 Steady Momentum"
         recommendation = (
-            "You're building strong recall. Re-attempt missed quiz levels to push accuracy past <b>80%</b> "
+            "You're building strong recall. Re-attempt missed quiz levels to push accuracy past 80% "
             "and unlock stronger exam readiness."
         )
     else:
         readiness_tag = "🌟 Exam-Ready Pace"
         recommendation = (
-            "High accuracy across your practice rounds! Keep your streak alive with <b>Daily Challenges</b> "
+            "High accuracy across your practice rounds! Keep your streak alive with Daily Challenges "
             "and test yourself against timed exam/quiz sets to stay sharp."
         )
 
@@ -1786,10 +2165,11 @@ async def cb_my_progress(callback: CallbackQuery):
         level_section = "\n<b>📈 By Difficulty Level</b>\n" + "\n".join(level_breakdown_lines) + "\n"
 
     streak_str = f"<b>{streak_days} day(s)</b>" if streak_days > 0 else "<i>0 days (start today!)</i>"
+    safe_student_name = html.escape(student.full_name or "Student")
 
     text = (
         f"📊 <b>QineSystems Learning Progress</b>\n"
-        f"👤 <b>{student.full_name}</b> · <b>{plan_badge}</b> · <code>{readiness_tag}</code>\n\n"
+        f"👤 <b>{safe_student_name}</b> · <b>{plan_badge}</b> · <code>{html.escape(readiness_tag)}</code>\n\n"
         f"<b>🎯 Mastery &amp; Activity</b>\n"
         f"• Completed Quizzes: <b>{total_quizzes}</b>\n"
         f"• Answered Correctly: <b>{total_correct}/{total_questions}</b> (<b>{accuracy_pct:.0f}%</b>)\n"
@@ -1798,18 +2178,19 @@ async def cb_my_progress(callback: CallbackQuery):
         f"• Daily Challenge Streak: {streak_str}"
         f"{level_section}\n"
         f"<b>💡 Recommended Next Step</b>\n"
-        f"<i>{recommendation}</i>\n\n"
+        f"<i>{html.escape(recommendation)}</i>\n\n"
         f"📢 <a href=\"{CHANNEL_URL}\">{CHANNEL_HANDLE}</a>"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⏱ Take a Quiz", callback_data="feat:quiz"),
             InlineKeyboardButton(text="⚡ Daily Challenge", callback_data="dc:hub"),
+            InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard:weekly"),
         ],
         [
-            InlineKeyboardButton(text="📂 Study Resources", callback_data="nav:resources_hub"),
-            InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard:weekly"),
+            InlineKeyboardButton(text="🎓 1st Year", callback_data="yr:1"),
+            InlineKeyboardButton(text="📘 2nd Year", callback_data="yr:2"),
+            InlineKeyboardButton(text="📙 3rd Year", callback_data="yr:3"),
         ],
         back_and_home_row("nav:main"),
     ])
@@ -1830,6 +2211,7 @@ def build_dc_hub_kb() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📖 English Vocab", callback_data="dc:open:vocab"),
+            InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard:weekly"),
         ],
         back_and_home_row("nav:main"),
     ])
@@ -1919,7 +2301,7 @@ async def render_dc_view(
 
     parts = [
         f"⚡ <b>Daily Challenge · {challenge['track_label']}</b>",
-        f"📌 <b>Topic:</b> {challenge['title']} · <code>{challenge['date_str']}</code>",
+        f"📌 <b>Topic:</b> {html.escape(challenge['title'])} · <code>{challenge['date_str']}</code>",
         "",
         f"<b>Challenge:</b>\n{challenge['prompt']}",
     ]
@@ -2067,8 +2449,9 @@ async def cb_leaderboard(callback: CallbackQuery):
         for entry in data["top"]:
             medal = MEDALS.get(entry["rank"], f"#{entry['rank']}")
             boost_tag = " ⚡<i>Mastery Boost</i>" if entry["boosted"] else ""
+            safe_entry_name = html.escape(entry["name"])
             lines.append(
-                f"{medal} <b>{entry['name']}</b> — <b>{entry['xp']} XP</b>{boost_tag}\n"
+                f"{medal} <b>{safe_entry_name}</b> — <b>{entry['xp']} XP</b>{boost_tag}\n"
                 f"    🎯 Strength: <b>{entry['accuracy']:.0f}%</b> ({entry['correct']}/{entry['questions']} ans) · "
                 f"📝 Quizzes: <b>{entry['quizzes']}</b>"
             )
@@ -2128,6 +2511,7 @@ async def cb_help(callback: CallbackQuery, state: FSMContext):
     )
     await safe_edit_message(callback, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
+
 @router.callback_query(F.data.startswith("sup:cat:"))
 async def cb_support_category(callback: CallbackQuery, state: FSMContext):
     cat_key = callback.data.split(":", 2)[2]
@@ -2141,7 +2525,7 @@ async def cb_support_category(callback: CallbackQuery, state: FSMContext):
         back_and_home_row("nav:main"),
     ])
     text = (
-        f"✍️ <b>New Ticket · {topic_name}</b>\n\n"
+        f"✍️ <b>New Ticket · {html.escape(topic_name)}</b>\n\n"
         f"Send your message now so an administrator can follow up.\n"
         f"<i>Student Reference:</i> <code>{callback.from_user.id}</code>"
     )
@@ -2168,18 +2552,19 @@ async def receive_support_ticket(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
         f"📩 <b>Ticket #{ticket.id} Logged</b>\n"
-        f"<b>Topic:</b> {topic_name}\n"
+        f"<b>Topic:</b> {html.escape(topic_name)}\n"
         f"Your note is in the QineSystems admin queue.",
         reply_markup=build_main_menu(message.from_user.id),
         parse_mode="HTML",
     )
 
-    user_handle = f"@{message.from_user.username}" if message.from_user.username else "no username"
+    user_handle = f"@{html.escape(message.from_user.username)}" if message.from_user.username else "no username"
+    safe_sender = html.escape(message.from_user.full_name or "Student")
     admin_alert = (
         f"🆕 <b>New Support Ticket #{ticket.id}</b>\n"
-        f"• <b>Topic:</b> {topic_name}\n"
-        f"• <b>Student:</b> {message.from_user.full_name} ({user_handle}) · <code>{message.from_user.id}</code>\n\n"
-        f"<b>Message:</b>\n{raw_body}"
+        f"• <b>Topic:</b> {html.escape(topic_name)}\n"
+        f"• <b>Student:</b> {safe_sender} ({user_handle}) · <code>{message.from_user.id}</code>\n\n"
+        f"<b>Message:</b>\n{html.escape(raw_body)}"
     )
 
     if message.photo:
@@ -2203,7 +2588,7 @@ async def receive_support_ticket(message: Message, state: FSMContext):
 # --- 14. Referrals ---
 def build_referral_kb(ref_code: str, ref_link: str) -> InlineKeyboardMarkup:
     share_payload = (
-        f"🎓 Join QineSystems — Ethiopian Freshman Digital Learning Platform!\n"
+        f"🎓 Join QineSystems — Ethiopian University Digital Learning Platform!\n"
         f"Use my invite link to start learning:\n{ref_link}\n"
         f"Invite Code: {ref_code}"
     )
@@ -2256,8 +2641,8 @@ async def cb_referral(callback: CallbackQuery):
         f"🎁 <b>Referral Hub</b>\n\n"
         f"Earn <b>{REFERRAL_REWARD_ETB} ETB</b> for every successful student referral.\n"
         f"<i>Referrals count once your invited friend activates a paid plan.</i>\n\n"
-        f"🎫 <b>Your Invite Code:</b> <code>{info['code']}</code>\n"
-        f"🔗 <b>Your Invite Link:</b> <code>{info['link']}</code>\n\n"
+        f"🎫 <b>Your Invite Code:</b> <code>{html.escape(info['code'])}</code>\n"
+        f"🔗 <b>Your Invite Link:</b> <code>{html.escape(info['link'])}</code>\n\n"
         f"📊 <b>Your Stats</b>\n"
         f"• Sent: <b>{info['sent']}</b>\n"
         f"• ✅ Approved: <b>{info['approved']}</b>\n"
@@ -2324,7 +2709,7 @@ async def cb_ref_board(callback: CallbackQuery):
         for idx, (app_cnt, total_cnt, earned, label) in enumerate(ranked[:10]):
             badge = medals[idx] if idx < 3 else f"#{idx + 1}"
             lines.append(
-                f"{badge} <b>{label}</b> — <b>{app_cnt} approved</b> ({total_cnt} invited) · <b>{earned} ETB</b>"
+                f"{badge} <b>{html.escape(label)}</b> — <b>{app_cnt} approved</b> ({total_cnt} invited) · <b>{earned} ETB</b>"
             )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -2359,16 +2744,6 @@ async def cb_open_community(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="▶️ YouTube Channel", url="https://www.youtube.com/@qinesystems"),
             InlineKeyboardButton(text="🌐 Official Website", url="https://qinesystems.vercel.app"),
         ],
-        [
-                    InlineKeyboardButton(text="📣 Telegram Channel", url="https://t.me/QineSystems"),
-                    InlineKeyboardButton(text="💬 Student Group", url="https://t.me/QineSystems_fresh"),
-        ],
-        [
-            InlineKeyboardButton(text="▶️ YouTube Channel", url="https://www.youtube.com/@qinesystems"),
-            InlineKeyboardButton(text="🌐 Official Website", url="https://qinesystems.vercel.app"),
-        ],
-        [
-            InlineKeyboardButton(text="🏠 Main Menu", callback_data="nav:main"),
-        ],
+        back_and_home_row("nav:help"),
     ])
     await safe_edit_message(callback, text, reply_markup=kb)

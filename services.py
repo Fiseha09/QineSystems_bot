@@ -19,6 +19,12 @@ CATALOGUE_26_COURSES = [
     "Database", "Electric city"
 ]
 
+DEFAULT_COURSE_YEARS: dict[str, str] = {
+    "Networking": "2nd Year",
+    "Database": "2nd Year",
+    "Electric city": "3rd Year",
+}
+
 DEFAULT_FEATURES = [
     # Free Learning Features
     ("modules", "📚 Modules", True, False, 1),
@@ -211,7 +217,7 @@ DAILY_CHALLENGES: dict[str, list[dict]] = {
         },
     ],
     "vocab": [
-            {
+        {
             "id": "voc-1",
             "title": "Academic Word: Mitigate",
             "prompt": "What does mitigate mean in: 'Early backups help mitigate the impact of data loss.'?",
@@ -413,7 +419,11 @@ async def seed_initial_data(db: AsyncSession):
     existing_courses = set((await db.execute(select(Course.name))).scalars().all())
     for name in CATALOGUE_26_COURSES:
         if name not in existing_courses:
-            db.add(Course(name=name, is_active=True))
+            db.add(Course(
+                name=name,
+                year_level=DEFAULT_COURSE_YEARS.get(name, "1st Year"),
+                is_active=True,
+            ))
 
     existing_features = set((await db.execute(select(FeatureConfig.key))).scalars().all())
     for key, title, is_free, has_levels, order in DEFAULT_FEATURES:
@@ -498,9 +508,16 @@ async def check_feature_entitlement(db: AsyncSession, student: Student, feature_
     return has_active_premium(student), feature
 
 
-async def get_all_courses_for_feature(db: AsyncSession, feature_key: str) -> list[Course]:
-    """Returns ALL active courses."""
-    stmt = select(Course).where(Course.is_active == True).order_by(Course.name)
+async def get_all_courses_for_feature(
+    db: AsyncSession,
+    feature_key: str,
+    year_level: str | None = None,
+) -> list[Course]:
+    """Returns active courses, optionally filtered by year_level (e.g., '1st Year', '2nd Year', '3rd Year')."""
+    stmt = select(Course).where(Course.is_active == True)
+    if year_level:
+        stmt = stmt.where(Course.year_level == year_level)
+    stmt = stmt.order_by(Course.name)
     return list((await db.execute(stmt)).scalars().all())
 
 

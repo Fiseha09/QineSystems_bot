@@ -39,6 +39,7 @@ class Course(Base):
     __tablename__ = "courses"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(150), unique=True, nullable=False)
+    year_level = Column(String(30), default="1st Year", nullable=False, index=True)  # e.g., '1st Year', '2nd Year', '3rd Year'
     is_active = Column(Boolean, default=True)
     chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
 

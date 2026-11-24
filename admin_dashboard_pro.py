@@ -1,8 +1,9 @@
 import csv
+import html
 import io
 import os
 from datetime import datetime, timedelta
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -31,6 +32,18 @@ PLAN_DURATIONS_DAYS: dict[str, int] = {
     "QINE_PRO": 90,
 }
 
+YEAR_OPTIONS: list[tuple[str, str]] = [
+    ("1st Year", "🎓 1st Year"),
+    ("2nd Year", "📘 2nd Year"),
+    ("3rd Year", "📙 3rd Year"),
+]
+
+YEAR_SHORT_BADGE: dict[str, str] = {
+    "1st Year": "1st Yr",
+    "2nd Year": "2nd Yr",
+    "3rd Year": "3rd Yr",
+}
+
 
 def is_pro_admin(user_id: int) -> bool:
     load_dotenv(override=True)
@@ -50,11 +63,16 @@ class ProAdminFSM(StatesGroup):
     adding_course = State()
 
 
-def pro_admin_home_kb(pending_count: int) -> InlineKeyboardMarkup:
+def pro_admin_home_kb(pending_count: int, open_tickets: int = 0) -> InlineKeyboardMarkup:
     approval_text = (
         f"✅ Approve {pending_count} waiting users"
         if pending_count > 0
         else "✅ Approve 0 waiting users"
+    )
+    ticket_btn_text = (
+        f"🎫 Tickets ({open_tickets} open)"
+        if open_tickets > 0
+        else "🎫 Tickets"
     )
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=approval_text, callback_data="pro:queue")],
@@ -76,17 +94,18 @@ def pro_admin_home_kb(pending_count: int) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🩺 Content Health", callback_data="pro:health"),
+            InlineKeyboardButton(text=ticket_btn_text, callback_data="pro:tickets"),
+        ],
+        [
             InlineKeyboardButton(text="📋 CSV Validator", callback_data="pro:csv_validate"),
-        ],
-        [
             InlineKeyboardButton(text="📢 Broadcast", callback_data="pro:broadcast"),
+        ],
+        [
             InlineKeyboardButton(text="🚀 Bulk Import", callback_data="adm:bulk_hub"),
-        ],
-        [
             InlineKeyboardButton(text="🛠 Full CRUD", callback_data="adm:crud_hub"),
-            InlineKeyboardButton(text="🔄 Refresh", callback_data="adm:home_pro"),
         ],
         [
+            InlineKeyboardButton(text="🔄 Refresh", callback_data="adm:home_pro"),
             InlineKeyboardButton(text="⬅️ Back to Menu", callback_data="nav:main"),
         ],
     ])
@@ -174,17 +193,18 @@ async def cb_pro_admin_home(callback: CallbackQuery, state: FSMContext):
             else "✅ <b>0 payment receipts waiting in queue.</b>\n"
         )
         ticket_line = f"🎫 <b>{open_tickets} open support ticket(s).</b>\n\n" if open_tickets > 0 else "\n"
+        safe_admin = html.escape(callback.from_user.full_name or "Admin")
         text = (
             f"👑 <b>Admin Control Center · QineSystems</b>\n"
             f"<i>Live DB snapshot · {now_utc}</i>\n\n"
             f"{queue_line}{ticket_line}"
             f"Users     <code>{total_users} total · {paid_users} paid</code>\n"
             f"Content   <code>{total_questions} questions · {total_subjects} subjects · {total_categories} categories</code>\n"
-            f"Admin     <code>{callback.from_user.full_name} ({callback.from_user.id})</code>"
+            f"Admin     <code>{safe_admin} ({callback.from_user.id})</code>"
         )
-        await safe_edit_or_send(callback, text, pro_admin_home_kb(pending_count))
+        await safe_edit_or_send(callback, text, pro_admin_home_kb(pending_count, open_tickets))
     except Exception as exc:
-        await callback.message.answer(f"❌ Control Center error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Control Center error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:queue")
@@ -212,7 +232,7 @@ async def cb_pro_queue(callback: CallbackQuery):
             caption = (
                 f"💳 <b>Receipt #{r.id}</b>\n"
                 f"Student ID: <code>{r.student_id}</code>\n"
-                f"Plan: <code>{r.plan_code}</code>"
+                f"Plan: <code>{html.escape(r.plan_code)}</code>"
             )
             raw_id = (r.receipt_file_id or "").strip()
             try:
@@ -231,11 +251,11 @@ async def cb_pro_queue(callback: CallbackQuery):
                         )
             except Exception as e:
                 await callback.bot.send_message(
-                    callback.from_user.id, f"{caption}\n\n⚠️ <i>Error: {e}</i>", reply_markup=kb, parse_mode="HTML"
+                    callback.from_user.id, f"{caption}\n\n⚠️ <i>Error: {html.escape(str(e))}</i>", reply_markup=kb, parse_mode="HTML"
                 )
     except Exception as exc:
         await callback.answer()
-        await callback.message.answer(f"❌ Queue error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Queue error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:users")
@@ -265,7 +285,7 @@ async def cb_pro_users(callback: CallbackQuery):
             InlineKeyboardMarkup(inline_keyboard=buttons),
         )
     except Exception as exc:
-        await callback.message.answer(f"❌ Users error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Users error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:referrals")
@@ -290,7 +310,7 @@ async def cb_pro_referrals(callback: CallbackQuery):
             back_pro_kb(extra_rows=[[InlineKeyboardButton(text="👥 View Users", callback_data="pro:users")]]),
         )
     except Exception as exc:
-        await callback.message.answer(f"❌ Referrals error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Referrals error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:questions")
@@ -315,19 +335,108 @@ async def cb_pro_subjects(callback: CallbackQuery, state: FSMContext):
         return
     await state.clear()
     await callback.answer()
+
+    async with AsyncSessionLocal() as db:
+        courses = (await db.execute(select(Course).order_by(Course.year_level, Course.name))).scalars().all()
+
+    yr_counts: dict[str, int] = {}
+    for c in courses:
+        yr = getattr(c, "year_level", None) or "1st Year"
+        yr_counts[yr] = yr_counts.get(yr, 0) + 1
+
+    summary_line = (
+        f"1st Yr: <b>{yr_counts.get('1st Year', 0)}</b> · "
+        f"2nd Yr: <b>{yr_counts.get('2nd Year', 0)}</b> · "
+        f"3rd Yr: <b>{yr_counts.get('3rd Year', 0)}</b>"
+    )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Add New Course", callback_data="pro:add_course")],
+        [InlineKeyboardButton(text="➕ Add New Course (with Year)", callback_data="pro:add_course")],
         [
+            InlineKeyboardButton(text="🔄 Assign / Cycle Course Year", callback_data="pro:year_assign:0"),
             InlineKeyboardButton(text="📖 Bulk Add Chapters", callback_data="bulk:chapters"),
-            InlineKeyboardButton(text="📚 Batch Drop PDFs", callback_data="bulk:pdfs"),
         ],
         [
+            InlineKeyboardButton(text="📚 Batch Drop PDFs", callback_data="bulk:pdfs"),
             InlineKeyboardButton(text="🔄 Toggle / Delete Subjects", callback_data="crud:courses:0"),
-            InlineKeyboardButton(text="📖 Manage Chapters", callback_data="crud:chapters:0"),
         ],
         [InlineKeyboardButton(text="⬅️ Back to Control Center", callback_data="adm:home_pro")],
     ])
-    await safe_edit_or_send(callback, "📚 <b>Subjects &amp; Content Management</b>", kb)
+    await safe_edit_or_send(
+        callback,
+        f"📚 <b>Subjects &amp; Content Management</b>\n<i>{summary_line}</i>",
+        kb,
+    )
+
+
+@admin_pro_router.callback_query(F.data.startswith("pro:year_assign:"))
+async def cb_pro_year_assign_list(callback: CallbackQuery):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    page_s = callback.data.split(":")[2]
+    page = int(page_s) if page_s.isdigit() else 0
+    page_size = 8
+
+    async with AsyncSessionLocal() as db:
+        courses = (await db.execute(select(Course).order_by(Course.name))).scalars().all()
+
+    await callback.answer()
+    total_pages = max(1, (len(courses) + page_size - 1) // page_size)
+    cur = max(0, min(page, total_pages - 1))
+    chunk = courses[cur * page_size : (cur + 1) * page_size]
+
+    buttons: list[list[InlineKeyboardButton]] = []
+    for c in chunk:
+        cur_yr = getattr(c, "year_level", None) or "1st Year"
+        badge = YEAR_SHORT_BADGE.get(cur_yr, cur_yr)
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"[{badge}] {c.name[:24]} → Tap to Cycle",
+                callback_data=f"pro:cycle_yr:{c.id}:{cur}",
+            )
+        ])
+
+    nav: list[InlineKeyboardButton] = []
+    if cur > 0:
+        nav.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"pro:year_assign:{cur - 1}"))
+    if cur < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"pro:year_assign:{cur + 1}"))
+    if nav:
+        buttons.append(nav)
+    buttons.append([InlineKeyboardButton(text="⬅️ Back to Subjects", callback_data="pro:subjects")])
+
+    await safe_edit_or_send(
+        callback,
+        f"🔄 <b>Assign / Cycle Course Year</b> (Page {cur + 1}/{total_pages})\n"
+        f"Tap a course to cycle <code>1st Year → 2nd Year → 3rd Year</code>:",
+        InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+
+
+@admin_pro_router.callback_query(F.data.startswith("pro:cycle_yr:"))
+async def cb_pro_cycle_course_year(callback: CallbackQuery):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    parts = callback.data.split(":")
+    course_id = int(parts[2])
+    page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
+
+    order = ["1st Year", "2nd Year", "3rd Year"]
+    async with AsyncSessionLocal() as db:
+        course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
+        if not course:
+            await callback.answer("Course not found.", show_alert=True)
+            return
+        cur_yr = getattr(course, "year_level", None) or "1st Year"
+        next_yr = order[(order.index(cur_yr) + 1) % len(order)] if cur_yr in order else "1st Year"
+        course.year_level = next_yr
+        await db.commit()
+        cname = course.name
+
+    await callback.answer(f"{cname} → {next_yr}")
+    callback.data = f"pro:year_assign:{page}"
+    await cb_pro_year_assign_list(callback)
 
 
 @admin_pro_router.callback_query(F.data == "pro:add_course")
@@ -340,13 +449,14 @@ async def cb_pro_add_course_prompt(callback: CallbackQuery, state: FSMContext):
     await safe_edit_or_send(
         callback,
         "➕ <b>Add New Course</b>\n\n"
-        "Send the exact course name to add to the catalogue (for example: <code>Applied Mathematics I</code>):",
+        "Step 1: Send the course name (for example: <code>Applied Mathematics I</code>).\n"
+        "Step 2: Pick its academic year (<b>1st Year</b>, <b>2nd Year</b>, or <b>3rd Year</b>):",
         back_pro_kb("pro:subjects", "⬅️ Cancel"),
     )
 
 
 @admin_pro_router.message(ProAdminFSM.adding_course, F.text & ~F.text.startswith("/"))
-async def msg_pro_add_course_save(message: Message, state: FSMContext):
+async def msg_pro_add_course_pick_year(message: Message, state: FSMContext):
     if not is_pro_admin(message.from_user.id):
         return
     course_name = " ".join((message.text or "").split()).strip()
@@ -366,7 +476,7 @@ async def msg_pro_add_course_save(message: Message, state: FSMContext):
         if existing:
             await state.clear()
             await message.answer(
-                f"⚠️ Course <b>{existing.name}</b> already exists (ID: <code>{existing.id}</code>).",
+                f"⚠️ Course <b>{html.escape(existing.name)}</b> already exists (ID: <code>{existing.id}</code>).",
                 reply_markup=back_pro_kb(
                     "pro:subjects",
                     "⬅️ Back to Subjects",
@@ -376,20 +486,68 @@ async def msg_pro_add_course_save(message: Message, state: FSMContext):
             )
             return
 
-        new_course = Course(name=course_name, is_active=True)
-        db.add(new_course)
-        await db.commit()
-        await db.refresh(new_course)
-        created_id = new_course.id
-        created_name = new_course.name
-
-    await state.clear()
+    await state.update_data(pending_course_name=course_name)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🎓 1st Year", callback_data="pro:save_crs_yr:1"),
+            InlineKeyboardButton(text="📘 2nd Year", callback_data="pro:save_crs_yr:2"),
+            InlineKeyboardButton(text="📙 3rd Year", callback_data="pro:save_crs_yr:3"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Cancel", callback_data="pro:subjects")],
+    ])
     await message.answer(
-        f"✅ <b>Course Added!</b>\n\n"
-        f"• Name: <b>{created_name}</b>\n"
+        f"📚 <b>Course Name:</b> <b>{html.escape(course_name)}</b>\n\n"
+        f"Select the academic year for this course:",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+
+@admin_pro_router.callback_query(F.data.startswith("pro:save_crs_yr:"))
+async def cb_pro_save_course_with_year(callback: CallbackQuery, state: FSMContext):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    yr_code = callback.data.split(":")[2]
+    yr_map = {"1": "1st Year", "2": "2nd Year", "3": "3rd Year"}
+    chosen_year = yr_map.get(yr_code, "1st Year")
+
+    data = await state.get_data()
+    course_name = (data.get("pending_course_name") or "").strip()
+    await state.clear()
+
+    if not course_name:
+        await callback.answer("Session expired. Start Add Course again.", show_alert=True)
+        return
+
+    async with AsyncSessionLocal() as db:
+        existing = (
+            await db.execute(
+                select(Course).where(func.lower(Course.name) == course_name.lower())
+            )
+        ).scalar_one_or_none()
+        if existing:
+            existing.year_level = chosen_year
+            await db.commit()
+            created_id = existing.id
+            created_name = existing.name
+        else:
+            new_course = Course(name=course_name, year_level=chosen_year, is_active=True)
+            db.add(new_course)
+            await db.commit()
+            await db.refresh(new_course)
+            created_id = new_course.id
+            created_name = new_course.name
+
+    await callback.answer("Course saved!")
+    await safe_edit_or_send(
+        callback,
+        f"✅ <b>Course Saved!</b>\n\n"
+        f"• Name: <b>{html.escape(created_name)}</b>\n"
+        f"• Year Level: <b>{html.escape(chosen_year)}</b>\n"
         f"• Course ID: <code>{created_id}</code>\n"
         f"• Status: 🟢 Active",
-        reply_markup=back_pro_kb(
+        back_pro_kb(
             "pro:subjects",
             "⬅️ Back to Subjects",
             extra_rows=[
@@ -399,7 +557,6 @@ async def msg_pro_add_course_save(message: Message, state: FSMContext):
                 ]
             ],
         ),
-        parse_mode="HTML",
     )
 
 
@@ -427,7 +584,7 @@ async def cb_pro_categories(callback: CallbackQuery):
             InlineKeyboardMarkup(inline_keyboard=buttons),
         )
     except Exception as exc:
-        await callback.message.answer(f"❌ Categories error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Categories error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data.startswith("pro_tog_cat:"))
@@ -443,6 +600,74 @@ async def cb_pro_toggle_category(callback: CallbackQuery):
             feat.is_free = not feat.is_free
             await db.commit()
     await cb_pro_categories(callback)
+
+
+# =====================================================================
+# SUPPORT TICKETS QUEUE
+# =====================================================================
+@admin_pro_router.callback_query(F.data == "pro:tickets")
+async def cb_pro_open_tickets(callback: CallbackQuery):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    await callback.answer()
+
+    async with AsyncSessionLocal() as db:
+        tickets = (await db.execute(
+            select(SupportTicket)
+            .where(SupportTicket.status == "OPEN")
+            .order_by(SupportTicket.id.desc())
+            .limit(8)
+        )).scalars().all()
+
+    if not tickets:
+        await safe_edit_or_send(
+            callback,
+            "🎫 <b>Support Tickets</b>\n\n✅ No open support tickets right now.",
+            back_pro_kb(),
+        )
+        return
+
+    lines = [f"🎫 <b>Open Support Tickets ({len(tickets)} shown)</b>\n"]
+    buttons: list[list[InlineKeyboardButton]] = []
+    for t in tickets:
+        preview = html.escape((t.message or "").strip()[:80])
+        lines.append(f"• <b>#{t.id}</b> · Student <code>{t.student_id}</code>\n  <i>{preview}</i>")
+        buttons.append([
+            InlineKeyboardButton(text=f"✅ Resolve #{t.id}", callback_data=f"pro:tkt_resolve:{t.id}")
+        ])
+    buttons.append([InlineKeyboardButton(text="⬅️ Back to Control Center", callback_data="adm:home_pro")])
+
+    await safe_edit_or_send(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@admin_pro_router.callback_query(F.data.startswith("pro:tkt_resolve:"))
+async def cb_pro_resolve_ticket(callback: CallbackQuery):
+    if not is_pro_admin(callback.from_user.id):
+        await callback.answer("Unauthorized.", show_alert=True)
+        return
+    t_id = int(callback.data.split(":")[2])
+
+    async with AsyncSessionLocal() as db:
+        ticket = (await db.execute(select(SupportTicket).where(SupportTicket.id == t_id))).scalar_one_or_none()
+        if not ticket:
+            await callback.answer("Ticket not found.", show_alert=True)
+            return
+        ticket.status = "RESOLVED"
+        await db.commit()
+        stu_id = ticket.student_id
+
+    try:
+        await callback.bot.send_message(
+            stu_id,
+            f"✅ <b>Support Ticket #{t_id} Resolved</b>\nAn admin has reviewed and resolved your request.",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    await callback.answer(f"Ticket #{t_id} resolved.")
+    await cb_pro_open_tickets(callback)
 
 
 # =====================================================================
@@ -506,10 +731,10 @@ async def cb_pay_methods_list(callback: CallbackQuery, state: FSMContext):
     for pm in methods:
         badge = "🟢 ACTIVE" if pm.is_verified_active else "🔴 INACTIVE"
         note_preview = (pm.instructions or "").strip()
-        note_line = f"\n   Note: <i>{note_preview[:45]}</i>" if note_preview else ""
+        note_line = f"\n   Note: <i>{html.escape(note_preview[:45])}</i>" if note_preview else ""
         lines.append(
-            f"{badge} <b>{pm.provider_name}</b> (<code>{pm.code}</code>)\n"
-            f"   Holder: <code>{pm.account_holder}</code> · Acct: <code>{pm.account_number}</code>{note_line}"
+            f"{badge} <b>{html.escape(pm.provider_name)}</b> (<code>{html.escape(pm.code)}</code>)\n"
+            f"   Holder: <code>{html.escape(pm.account_holder)}</code> · Acct: <code>{html.escape(pm.account_number)}</code>{note_line}"
         )
         buttons.append([
             InlineKeyboardButton(
@@ -573,8 +798,8 @@ async def cb_pay_method_edit_prompt(callback: CallbackQuery, state: FSMContext):
     label, current_val = label_map.get(field, ("Value", "—"))
     await safe_edit_or_send(
         callback,
-        f"✏️ <b>Edit {label} · {pm.code}</b>\n"
-        f"Current value: <code>{current_val}</code>\n\n"
+        f"✏️ <b>Edit {label} · {html.escape(pm.code)}</b>\n"
+        f"Current value: <code>{html.escape(str(current_val))}</code>\n\n"
         f"Send the new {label.lower()} below:",
         back_pro_kb("pay:methods", "⬅️ Cancel"),
     )
@@ -610,7 +835,7 @@ async def msg_pay_method_save_field(message: Message, state: FSMContext):
         await db.commit()
 
     await message.answer(
-        f"✅ Updated <b>{code}</b> ({field}) to <code>{new_val}</code>.",
+        f"✅ Updated <b>{html.escape(str(code))}</b> ({html.escape(str(field))}) to <code>{html.escape(new_val)}</code>.",
         reply_markup=back_pro_kb("pay:methods", "⬅️ Back to Payment Accounts"),
         parse_mode="HTML",
     )
@@ -650,9 +875,9 @@ async def cb_pay_pending_list(callback: CallbackQuery):
     buttons: list[list[InlineKeyboardButton]] = []
 
     for r, st in chunk:
-        st_name = (st.full_name if st and st.full_name else f"ID {r.student_id}")[:20]
+        st_name = html.escape((st.full_name if st and st.full_name else f"ID {r.student_id}")[:20])
         created = r.created_at.strftime("%m-%d %H:%M") if getattr(r, "created_at", None) else "—"
-        lines.append(f"• <b>#{r.id}</b> · {st_name} · <code>{r.plan_code}</code> · <i>{created}</i>")
+        lines.append(f"• <b>#{r.id}</b> · {st_name} · <code>{html.escape(r.plan_code)}</code> · <i>{created}</i>")
         buttons.append([
             InlineKeyboardButton(text=f"✅ #{r.id}", callback_data=f"pay:act:approve:{r.id}:{cur}"),
             InlineKeyboardButton(text=f"❌ #{r.id}", callback_data=f"pay:act:reject:{r.id}:{cur}"),
@@ -687,8 +912,8 @@ async def cb_pay_view_receipt(callback: CallbackQuery):
     caption = (
         f"💳 <b>Receipt #{r.id}</b>\n"
         f"• Student ID: <code>{r.student_id}</code>\n"
-        f"• Plan: <code>{r.plan_code}</code>\n"
-        f"• Status: <b>{r.status}</b>"
+        f"• Plan: <code>{html.escape(r.plan_code)}</code>\n"
+        f"• Status: <b>{html.escape(r.status)}</b>"
     )
     raw_id = (r.receipt_file_id or "").strip()
     try:
@@ -700,7 +925,7 @@ async def cb_pay_view_receipt(callback: CallbackQuery):
             except Exception:
                 await callback.bot.send_document(callback.from_user.id, raw_id, caption=caption, parse_mode="HTML")
     except Exception as e:
-        await callback.bot.send_message(callback.from_user.id, f"{caption}\n\n⚠️ <i>Could not load file: {e}</i>", parse_mode="HTML")
+        await callback.bot.send_message(callback.from_user.id, f"{caption}\n\n⚠️ <i>Could not load file: {html.escape(str(e))}</i>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data.startswith("pay:act:"))
@@ -729,7 +954,7 @@ async def cb_pay_single_action(callback: CallbackQuery):
             try:
                 await callback.bot.send_message(
                     r.student_id,
-                    f"✅ <b>Payment Approved!</b>\nYour <code>{r.plan_code}</code> subscription is now active.",
+                    f"✅ <b>Payment Approved!</b>\nYour <code>{html.escape(r.plan_code)}</code> subscription is now active.",
                     parse_mode="HTML",
                 )
             except Exception:
@@ -783,7 +1008,7 @@ async def cb_pay_all_list(callback: CallbackQuery):
     lines = [f"📋 <b>All Payments</b> (Page {cur + 1}/{total_pages}, Total: {len(receipts)})\n"]
     for r in chunk:
         b = badge.get(r.status, "•")
-        lines.append(f"{b} <b>#{r.id}</b> · Student <code>{r.student_id}</code> · <code>{r.plan_code}</code> · <b>{r.status}</b>")
+        lines.append(f"{b} <b>#{r.id}</b> · Student <code>{r.student_id}</code> · <code>{html.escape(r.plan_code)}</code> · <b>{html.escape(r.status)}</b>")
 
     rows: list[list[InlineKeyboardButton]] = []
     nav: list[InlineKeyboardButton] = []
@@ -935,7 +1160,7 @@ async def cb_pro_dashboard(callback: CallbackQuery):
         ])
         await safe_edit_or_send(callback, text, kb)
     except Exception as exc:
-        await callback.message.answer(f"❌ Dashboard error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Dashboard error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:analytics")
@@ -981,7 +1206,7 @@ async def cb_pro_analytics(callback: CallbackQuery):
         ])
         await safe_edit_or_send(callback, text, kb)
     except Exception as exc:
-        await callback.message.answer(f"❌ Analytics error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Analytics error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 @admin_pro_router.callback_query(F.data == "pro:health")
@@ -1009,7 +1234,7 @@ async def cb_pro_content_health(callback: CallbackQuery):
         chapters_no_quizzes = sum(1 for ch in chapters if quizzes_by_chapter.get(ch.id, 0) == 0)
         unpublished_res = sum(1 for r in resources if getattr(r, "is_published", True) is False)
 
-        preview_empty_courses = ", ".join(courses_no_chapters[:6])
+        preview_empty_courses = ", ".join(html.escape(n) for n in courses_no_chapters[:6])
         if len(courses_no_chapters) > 6:
             preview_empty_courses += f" (+{len(courses_no_chapters) - 6} more)"
 
@@ -1029,7 +1254,7 @@ async def cb_pro_content_health(callback: CallbackQuery):
         ])
         await safe_edit_or_send(callback, text, kb)
     except Exception as exc:
-        await callback.message.answer(f"❌ Health check error: <code>{exc}</code>", parse_mode="HTML")
+        await callback.message.answer(f"❌ Health check error: <code>{html.escape(str(exc))}</code>", parse_mode="HTML")
 
 
 # =====================================================================
@@ -1065,13 +1290,13 @@ async def msg_pro_validate_csv(message: Message, state: FSMContext):
         valid_rows = len(rows) - empty_rows
         await message.answer(
             f"✅ <b>CSV Validated!</b>\n"
-            f"• Columns ({len(headers)}): <code>{', '.join(headers) if headers else 'None'}</code>\n"
+            f"• Columns ({len(headers)}): <code>{html.escape(', '.join(headers)) if headers else 'None'}</code>\n"
             f"• Valid Rows: <b>{valid_rows}</b> · Blank Rows: <b>{empty_rows}</b>",
             reply_markup=back_pro_kb(),
             parse_mode="HTML",
         )
     except Exception as e:
-        await message.answer(f"❌ Error: <code>{e}</code>", reply_markup=back_pro_kb(), parse_mode="HTML")
+        await message.answer(f"❌ Error: <code>{html.escape(str(e))}</code>", reply_markup=back_pro_kb(), parse_mode="HTML")
     await state.clear()
 
 
@@ -1113,14 +1338,14 @@ async def msg_pro_broadcast_preview(message: Message, state: FSMContext):
     await message.answer(
         f"📢 <b>Broadcast Preview</b>\n"
         f"• Recipients: <b>{total_students}</b> registered student(s)\n\n"
-        f"<blockquote>{text}</blockquote>",
+        f"<blockquote>{html.escape(text)}</blockquote>",
         reply_markup=kb,
         parse_mode="HTML",
     )
 
 
 @admin_pro_router.callback_query(F.data == "pro:bcast:send")
-async def cb_pro_broadcast_send(callback: CallbackQuery, state: FSMContext, bot: Bot):
+async def cb_pro_broadcast_send(callback: CallbackQuery, state: FSMContext):
     if not is_pro_admin(callback.from_user.id):
         await callback.answer("Unauthorized.", show_alert=True)
         return
@@ -1137,10 +1362,11 @@ async def cb_pro_broadcast_send(callback: CallbackQuery, state: FSMContext, bot:
     async with AsyncSessionLocal() as db:
         student_ids = (await db.execute(select(Student.telegram_id))).scalars().all()
 
+    safe_msg = html.escape(text)
     sent, failed = 0, 0
     for uid in student_ids:
         try:
-            await bot.send_message(uid, f"📢 <b>Announcement</b>\n\n{text}", parse_mode="HTML")
+            await callback.bot.send_message(uid, f"📢 <b>Announcement</b>\n\n{safe_msg}", parse_mode="HTML")
             sent += 1
         except Exception:
             failed += 1

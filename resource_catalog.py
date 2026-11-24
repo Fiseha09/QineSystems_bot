@@ -263,9 +263,11 @@ async def delete_catalog_item(res_id: int) -> bool:
         return True
 
 
-async def list_active_courses() -> list[Course]:
+async def list_active_courses(year_level: str | None = None) -> list[Course]:
     async with AsyncSessionLocal() as db:
         stmt = select(Course).order_by(Course.name)
         if hasattr(Course, "is_active"):
             stmt = stmt.where(Course.is_active.is_(True) | Course.is_active.is_(None))
-        return (await db.execute(stmt)).scalars().all()
+        if year_level and hasattr(Course, "year_level"):
+            stmt = stmt.where(Course.year_level == year_level)
+        return list((await db.execute(stmt)).scalars().all())

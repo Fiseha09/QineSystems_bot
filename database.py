@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import DeclarativeBase
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 RAW_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./qinesystems.db").strip()
 
@@ -17,23 +17,34 @@ def _normalize_async_database_url(url: str) -> tuple[str, dict]:
         url = "postgresql+asyncpg://" + url[len("postgresql://"):]
 
     if url.startswith("sqlite"):
-        connect_args = {"check_same_thread": False}
-        return url, connect_args
+        return url, {"check_same_thread": False}
 
     parts = urlsplit(url)
     query_pairs = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+    sslmode_val = query_pairs.pop("sslmode", "").strip().lower()
+    ssl_val = query_pairs.pop("ssl", "").strip().lower()
+    hostname_l = (parts.hostname or "").lower()
+
+    disable_ssl = sslmode_val == "disable" or ssl_val in {"false", "0", "disable"}
     needs_ssl = (
-        query_pairs.pop("sslmode", "").lower() in {"require", "verify-ca", "verify-full"}
-        or query_pairs.pop("ssl", "").lower() in {"true", "1", "require"}
-        or "supabase.co" in parts.hostname.lower() if parts.hostname else False
+        not disable_ssl
+        and (
+            sslmode_val in {"require", "verify-ca", "verify-full"}
+            or ssl_val in {"true", "1", "require"}
+            or "supabase.co" in hostname_l
+        )
     )
+
     clean_query = urlencode(query_pairs)
     clean_url = urlunsplit((parts.scheme, parts.netloc, parts.path, clean_query, parts.fragment))
 
     connect_args: dict = {}
     if needs_ssl:
-        ssl_ctx = ssl.create_default_context()
-        connect_args["ssl"] = ssl_ctx
+        connect_args["ssl"] = ssl.create_default_context()
+    elif disable_ssl:
+        connect_args["ssl"] = False
+
     return clean_url, connect_args
 
 
